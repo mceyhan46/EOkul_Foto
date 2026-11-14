@@ -12,6 +12,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.eokul.studio.core.BackupZip
+import com.eokul.studio.core.CrossClass
 import com.eokul.studio.core.Crop
 import com.eokul.studio.core.RestoreGuard
 import com.eokul.studio.core.RosterParser
@@ -428,6 +429,22 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ liste içe aktarma
     /** Sınıfa öğrenci ekler. [classId] null ise [newName] ile yeni sınıf açılır. Sonuç mesajı döner (hata: null). */
+    // ---- Aynı numaranın başka sınıflarda da bulunması: engellenmez, kullanıcı uyarılır.
+    private fun numbersByClass(): Map<String, Set<String>> =
+        classes.associate { c -> c.id to c.students.mapTo(HashSet()) { it.no } }
+
+    /** [no] başka sınıflarda da varsa uyarı metni, yoksa null. */
+    private fun crossClassWarning(no: String, classId: String): String? {
+        val ids = CrossClass.classesWith(no, numbersByClass(), classId)
+        if (ids.isEmpty()) return null
+        val names = ids.mapNotNull { classById(it)?.name }
+        val shown = names.take(3).joinToString(", ") + if (names.size > 3) " +${names.size - 3}" else ""
+        return "⚠ $no numarası başka sınıfta da var: $shown"
+    }
+
+    private fun sharedCount(rows: List<RosterParser.Row>, classId: String): Int =
+        CrossClass.countShared(rows.filter { it.error == null }.map { it.no }, numbersByClass(), classId)
+
     fun importRoster(classId: String?, newName: String, rows: List<RosterParser.Row>, mode: MergeMode): String? {
         if (rows.isEmpty()) return null
         val id = classId ?: addClass(newName) ?: return null
@@ -439,7 +456,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         if (r.updated > 0) parts.add("${r.updated} güncellendi")
         if (r.removed > 0) parts.add("${r.removed} çıkarıldı")
         val msg = if (parts.isEmpty()) "Değişiklik yok" else parts.joinToString(", ")
-        say("✓ $msg")
+        val shared = sharedCount(rows, id)
+        say("✓ $msg" + if (shared > 0) "\n⚠ $shared numara başka sınıflarda da var (Veri denetimi'nde listelenir)" else "")
         return id
     }
 
@@ -450,6 +468,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         var created = 0
         var merged = 0
         var students = 0
+        var shared = 0
         for (p in plans) {
             if (p.rows.isEmpty()) continue
             val n = RosterParser.normalizeSpaces(p.name)
@@ -459,12 +478,14 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 val cls = classById(existing.id) ?: continue
                 val r = mergeStudents(cls.students, p.rows, MergeMode.UPSERT)
                 updateClass(existing.id) { it.copy(students = r.students) }
+                shared += sharedCount(p.rows, existing.id)
                 merged++
             } else {
                 val id = addClass(n) ?: continue
                 val cls = classById(id) ?: continue
                 val r = mergeStudents(cls.students, p.rows, MergeMode.ADD)
                 updateClass(id) { it.copy(students = r.students) }
+                shared += sharedCount(p.rows, id)
                 created++
             }
             students += p.rows.size
@@ -473,7 +494,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         if (created > 0) parts.add("$created sınıf eklendi")
         if (merged > 0) parts.add("$merged sınıf güncellendi")
         val msg = if (parts.isEmpty()) "Değişiklik yok" else parts.joinToString(", ") + " · $students öğrenci"
-        say("✓ $msg")
+        say("✓ $msg" + if (shared > 0) "\n⚠ $shared numara başka sınıflarda da var (Veri denetimi'nde listelenir)" else "")
         return msg
     }
 
@@ -486,6 +507,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         if (c.students.any { it.no == n }) return "Bu numara zaten var"
         val list = (c.students + Student(n, nm)).sortedWith { a, b -> RosterParser.compareNo(a.no, b.no) }
         updateClass(classId) { it.copy(students = list) }
+        crossClassWarning(n, classId)?.let { say(it) }
         return null
     }
 
@@ -513,6 +535,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         Ops.log("op", "name", "renumber", "ok", true)
+        crossClassWarning(newNo, classId)?.let { say(it) }
         val wasCaptured = st.captured
         viewModelScope.launch(Dispatchers.IO) {
             saveMutex.withLock {

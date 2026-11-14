@@ -186,3 +186,6 @@ Yedek ZIP yazma/okuma-dogrulama -> core/BackupZip.java (+BackupZipTest, 119 test
 
 ## Refactor 3 (14 Kas)
 Geri yukleme/onizleme sinirlari ve yol denetimi -> core/RestoreGuard.java (Budget: girdi sayisi, yinelenen ad, toplam ve tur bazli boyut; photoRelativePath; safeTarget). inspectBackup ve restore ayni kurallari kullaniyor (onceden kopyaydi). RestoreGuardTest ile 128 test.
+
+## Capraz sinif ayni numara uyarisi (14 Kas)
+core/CrossClass.java (+CrossClassTest, 130 test). Engellemez: ogrenci ekle/numara degistir sonrasi "numara baska sinifta da var: ..." mesaji; liste ve sube iceri aktarimda "N numara baska siniflarda da var" notu. Ayrintisi Veri denetimi'nde.
