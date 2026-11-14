@@ -177,3 +177,6 @@ zoomOnFace: kutunun ust kenari sabit (bas ustu bosluk degismez), yatayda yuz mer
 
 ## Surum numaralandirma (14 Kas)
 versionName 1.1.<run_number>; versionCode = run_number + 1000 (eski kurulum 93 idi, yeni depoda run_number sifirdan basladigi icin kurulum "surum dusuk" hatasi veriyordu). Sonraki surumler hep artar.
+
+## Refactor 1 (14 Kas)
+PIN sifreleme ve kilit takvimi -> core/PinCrypto.java; yedek girdi adi -> core/BackupPaths.java (+ PinCryptoTest, BackupPathsTest, 113 test). StudioViewModel ~40 satir kuculdu, davranis ayni.

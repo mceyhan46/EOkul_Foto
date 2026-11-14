@@ -145,32 +145,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         ) locked = true
     }
 
-    /** Eski (SHA-256 + tuz) biçim; yalnızca eski kayıtları doğrulamak için tutulur. */
-    private fun legacyHash(pin: String, salt: String): String {
-        val d = java.security.MessageDigest.getInstance("SHA-256").digest((salt + pin).toByteArray())
-        return d.joinToString("") { b -> "%02x".format(b) }
-    }
-
-    /** PBKDF2-HMAC-SHA256 (Android'in yerleşik API'si): kaba kuvvetle PIN tahminini yavaşlatır. Biçim: "pbkdf2$tur$özet". */
-    private fun pbkdf2(pin: String, salt: String, iterations: Int): String {
-        val spec = javax.crypto.spec.PBEKeySpec(pin.toCharArray(), salt.toByteArray(), iterations, 256)
-        val d = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        return "pbkdf2$$iterations$" + d.joinToString("") { b -> "%02x".format(b) }
-    }
-
-    private fun hashPin(pin: String, salt: String): String = pbkdf2(pin, salt, PIN_ITERATIONS)
-
-    private fun constantTimeEquals(a: String, b: String): Boolean =
-        java.security.MessageDigest.isEqual(a.toByteArray(), b.toByteArray())
-
     fun checkPin(pin: String): Boolean {
         val h = settings.pinHash ?: return true
         val salt = settings.pinSalt ?: return false
-        if (h.startsWith("pbkdf2$")) {
-            val iters = h.split("$").getOrNull(1)?.toIntOrNull() ?: return false
-            return constantTimeEquals(pbkdf2(pin, salt, iters), h)
-        }
-        return constantTimeEquals(legacyHash(pin, salt), h)
+        return com.eokul.studio.core.PinCrypto.verify(pin, salt, h)
     }
 
     // PIN deneme sınırı kalıcıdır: uygulamayı kapatıp açmak beklemeyi sıfırlamaz.
@@ -185,7 +163,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun recordPinFailure() {
         val fails = lockPrefs.getInt("fails", 0) + 1
-        val wait = if (fails >= 3) minOf(300, 5 * (fails - 2)) else 0   // 3. hatadan sonra 5, 10, 15 … en çok 300 sn
+        val wait = com.eokul.studio.core.PinCrypto.waitSecondsAfterFailures(fails)
         lockPrefs.edit().putInt("fails", fails).putLong("until", if (wait > 0) System.currentTimeMillis() + wait * 1000L else 0L).apply()
         Ops.log("pin_fail", "fails", fails)
     }
@@ -200,8 +178,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         // Eski biçimle kaydedilmiş PIN doğru girildiğinde yeni biçime sessizce yükseltilir.
         val h = settings.pinHash
         val salt = settings.pinSalt
-        if (h != null && salt != null && !h.startsWith("pbkdf2$")) {
-            SettingsState.update(settings.copy(pinHash = hashPin(pin, salt)))
+        if (h != null && salt != null && com.eokul.studio.core.PinCrypto.isLegacy(h)) {
+            SettingsState.update(settings.copy(pinHash = com.eokul.studio.core.PinCrypto.hash(pin, salt)))
         }
         locked = false
         return true
@@ -213,7 +191,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             locked = false
         } else {
             val salt = java.util.UUID.randomUUID().toString()
-            SettingsState.update(settings.copy(pinHash = hashPin(pin, salt), pinSalt = salt))
+            SettingsState.update(settings.copy(pinHash = com.eokul.studio.core.PinCrypto.hash(pin, salt), pinSalt = salt))
         }
     }
 
@@ -1012,7 +990,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     zip.write(rosterBytes)
                     zip.closeEntry()
                     for (f in photos) {
-                        val rel = f.relativeTo(photosDir.parentFile!!).path.replace('\\', '/')
+                        val rel = com.eokul.studio.core.BackupPaths.entryName(ctx.filesDir, f)
                         zip.putNextEntry(java.util.zip.ZipEntry(rel))
                         f.inputStream().use { it.copyTo(zip) }
                         zip.closeEntry()
@@ -1028,7 +1006,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 val expectedNames = HashSet<String>().apply {
                     add("yedek.json")
                     add("roster.json")
-                    photos.forEach { add(it.relativeTo(photosDir.parentFile!!).path.replace('\\', '/')) }
+                    photos.forEach { add(com.eokul.studio.core.BackupPaths.entryName(ctx.filesDir, it)) }
                 }
                 ctx.contentResolver.openInputStream(uri)?.use { ins ->
                     java.util.zip.ZipInputStream(ins).use { z ->
@@ -1715,7 +1693,6 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 private const val ORIG_MAX_SIDE = 1600
 private const val ORIG_MAX_BYTES = 900_000
 
-private const val PIN_ITERATIONS = 120_000
 
 private const val RESTORE_MAX_ENTRIES = 50_000
 private const val RESTORE_MAX_PHOTO = 5L * 1024 * 1024
