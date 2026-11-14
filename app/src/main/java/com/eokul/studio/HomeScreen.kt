@@ -42,6 +42,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.height
 
 @Composable
 fun HomeScreen(studio: StudioViewModel) {
@@ -67,11 +73,6 @@ fun HomeScreen(studio: StudioViewModel) {
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            "Öğrenci fotoğraflarını e-Okul ölçüsünde çekin, sınıf klasörlerine kaydedin.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                         )
                     }
                     var toolsMenu by remember { mutableStateOf(false) }
@@ -259,6 +260,7 @@ fun HomeScreen(studio: StudioViewModel) {
     }
 }
 
+/** İnce özet şeridi: kutu yok; çekilen/toplam, yüzde, ilerleme çizgisi ve tek satır bilgi. */
 @Composable
 private fun SummaryCard(studio: StudioViewModel) {
     val classes = studio.classes
@@ -267,28 +269,34 @@ private fun SummaryCard(studio: StudioViewModel) {
     val missing = total - done
     val retake = classes.sumOf { c -> c.students.count { it.retake } }
     val last = studio.settings.lastBackupMs
-    val backupText = if (last == 0L) "Yedek: hiç alınmadı"
-    else "Yedek: " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
+    val backupText = if (last == 0L) "Yedek yok"
+    else "Yedek " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
     val stale = done > 0 && (last == 0L || System.currentTimeMillis() - last > 7L * 24 * 3600 * 1000)
-    Card(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+    val frac = if (total == 0) 0f else done.toFloat() / total
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                "${classes.size} sınıf · $total öğrenci",
-                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold
+                androidx.compose.ui.text.buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp)) { append("$done") }
+                    withStyle(SpanStyle(color = muted)) { append(" / $total çekildi") }
+                },
+                modifier = Modifier.weight(1f)
             )
-            Text(
-                "✅ $done çekildi   ⏳ $missing eksik" + if (retake > 0) "   🔁 $retake tekrar" else "",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                backupText + if (stale) " — yedek almanız önerilir" else "",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (stale) Color(0xFFE08A00) else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("%${(frac * 100).toInt()}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         }
+        Spacer(Modifier.size(6.dp))
+        LinearProgressIndicator(
+            progress = { frac },
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
+        )
+        Spacer(Modifier.size(6.dp))
+        Text(
+            "${classes.size} sınıf · $missing eksik" + (if (retake > 0) " · $retake tekrar" else "") +
+                " · $backupText" + (if (stale) " (yedek önerilir)" else ""),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (stale) WarnOrange else muted
+        )
     }
 }
 
@@ -346,7 +354,7 @@ private fun ClassCard(
             LinearProgressIndicator(
                 progress = { if (total == 0) 0f else done.toFloat() / total },
                 color = barColor,
-                modifier = Modifier.fillMaxWidth().padding(end = 14.dp)
+                modifier = Modifier.fillMaxWidth().padding(end = 14.dp).height(6.dp).clip(CircleShape)
             )
         }
     }
