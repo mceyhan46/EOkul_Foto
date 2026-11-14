@@ -180,3 +180,6 @@ versionName 1.1.<run_number>; versionCode = run_number + 1000 (eski kurulum 93 i
 
 ## Refactor 1 (14 Kas)
 PIN sifreleme ve kilit takvimi -> core/PinCrypto.java; yedek girdi adi -> core/BackupPaths.java (+ PinCryptoTest, BackupPathsTest, 113 test). StudioViewModel ~40 satir kuculdu, davranis ayni.
+
+## Refactor 2 (14 Kas)
+Yedek ZIP yazma/okuma-dogrulama -> core/BackupZip.java (+BackupZipTest, 119 test). writeBackup ~45 satir kuculdu; ek: ZIP girdi adi guvenlik kontrolu (.. / mutlak yol) dogrulamada.

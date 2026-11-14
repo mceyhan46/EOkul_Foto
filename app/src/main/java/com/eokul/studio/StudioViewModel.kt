@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.eokul.studio.core.BackupZip
 import com.eokul.studio.core.Crop
 import com.eokul.studio.core.RosterParser
 import kotlinx.coroutines.CancellationException
@@ -982,56 +983,16 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 .toString()
             val n = artifactName(prefix, "zip")
             val uri = Output.writeStream(ctx, root, emptyList(), n, "application/zip") { out ->
-                java.util.zip.ZipOutputStream(out).use { zip ->
-                    zip.putNextEntry(java.util.zip.ZipEntry("yedek.json"))
-                    zip.write(manifest.toByteArray(Charsets.UTF_8))
-                    zip.closeEntry()
-                    zip.putNextEntry(java.util.zip.ZipEntry("roster.json"))
-                    zip.write(rosterBytes)
-                    zip.closeEntry()
-                    for (f in photos) {
-                        val rel = com.eokul.studio.core.BackupPaths.entryName(ctx.filesDir, f)
-                        zip.putNextEntry(java.util.zip.ZipEntry(rel))
-                        f.inputStream().use { it.copyTo(zip) }
-                        zip.closeEntry()
-                    }
-                }
+                BackupZip.write(out, manifest.toByteArray(Charsets.UTF_8), rosterBytes, ctx.filesDir, photos)
             }
             // Yazılan ZIP yeniden açılır; tüm girdiler, manifest ve roster snapshot'ı doğrulanır.
             try {
-                var entries = 0
-                var rosterText: String? = null
-                var manifestText: String? = null
-                val actualNames = HashSet<String>()
-                val expectedNames = HashSet<String>().apply {
-                    add("yedek.json")
-                    add("roster.json")
-                    photos.forEach { add(com.eokul.studio.core.BackupPaths.entryName(ctx.filesDir, it)) }
-                }
-                ctx.contentResolver.openInputStream(uri)?.use { ins ->
-                    java.util.zip.ZipInputStream(ins).use { z ->
-                        val sink = ByteArray(16 * 1024)
-                        while (true) {
-                            val entry = z.nextEntry ?: break
-                            entries++
-                            if (!actualNames.add(entry.name)) throw IOException("Yedekte yinelenen ZIP girdisi")
-                            if (entry.name == "roster.json" || entry.name == "yedek.json") {
-                                val bos = java.io.ByteArrayOutputStream()
-                                while (true) { val read = z.read(sink); if (read < 0) break; bos.write(sink, 0, read) }
-                                if (entry.name == "roster.json") rosterText = bos.toString("UTF-8")
-                                else manifestText = bos.toString("UTF-8")
-                            } else {
-                                while (z.read(sink) >= 0) { /* CRC kontrolü için girdinin sonuna kadar oku */ }
-                            }
-                        }
-                    }
+                val content = ctx.contentResolver.openInputStream(uri)?.use { ins ->
+                    BackupZip.read(ins, BackupZip.expectedNames(ctx.filesDir, photos))
                 } ?: throw IOException("Yedek dosyası geri okunamadı")
-                if (entries != expectedNames.size || actualNames != expectedNames) {
-                    throw IOException("Yedek girdileri doğrulanamadı ($entries/${expectedNames.size})")
-                }
-                val restoredSnapshot = store.parseStrict(rosterText ?: throw IOException("Yedek roster dosyası okunamadı"))
+                val restoredSnapshot = store.parseStrict(content.roster)
                 if (store.encode(restoredSnapshot) != store.encode(snap)) throw IOException("Yedek öğrenci listesi snapshot ile uyuşmuyor")
-                val m = org.json.JSONObject(manifestText ?: throw IOException("Yedek manifest okunamadı"))
+                val m = org.json.JSONObject(content.manifest)
                 if (m.optInt("classes", -1) != snap.size || m.optInt("students", -1) != snap.sumOf { it.students.size } ||
                     m.optInt("photos", -1) != photos.size
                 ) throw IOException("Yedek manifest doğrulaması başarısız")
