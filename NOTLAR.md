@@ -183,3 +183,6 @@ PIN sifreleme ve kilit takvimi -> core/PinCrypto.java; yedek girdi adi -> core/B
 
 ## Refactor 2 (14 Kas)
 Yedek ZIP yazma/okuma-dogrulama -> core/BackupZip.java (+BackupZipTest, 119 test). writeBackup ~45 satir kuculdu; ek: ZIP girdi adi guvenlik kontrolu (.. / mutlak yol) dogrulamada.
+
+## Refactor 3 (14 Kas)
+Geri yukleme/onizleme sinirlari ve yol denetimi -> core/RestoreGuard.java (Budget: girdi sayisi, yinelenen ad, toplam ve tur bazli boyut; photoRelativePath; safeTarget). inspectBackup ve restore ayni kurallari kullaniyor (onceden kopyaydi). RestoreGuardTest ile 128 test.

@@ -13,6 +13,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.eokul.studio.core.BackupZip
 import com.eokul.studio.core.Crop
+import com.eokul.studio.core.RestoreGuard
 import com.eokul.studio.core.RosterParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -897,41 +898,28 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             var json: String? = null
             var manifest: String? = null
             var photos = 0
-            var count = 0
-            var totalBytes = 0L
-            val seenEntries = HashSet<String>()
+            val budget = RestoreGuard.Budget()
             ctx.contentResolver.openInputStream(uri)?.use { ins ->
                 java.util.zip.ZipInputStream(ins).use { zip ->
                     val sink = ByteArray(16 * 1024)
                     while (true) {
                         val e = zip.nextEntry ?: break
                         if (e.isDirectory) continue
-                        if (++count > RESTORE_MAX_ENTRIES) throw IOException("Çok fazla dosya")
-                        if (!seenEntries.add(e.name)) throw IOException("Yinelenen dosya yolu")
-                        val isRoster = e.name == "roster.json"
-                        val isManifest = e.name == "yedek.json"
-                        val isPhoto = e.name.startsWith("photos/")
-                        if (isPhoto) {
-                            val rel = e.name.removePrefix("photos/")
-                            if (rel.isBlank() || rel.startsWith('/') || rel.contains('\\') ||
-                                rel.split('/').any { it == ".." || it == "." || it.isBlank() }
-                            ) throw IOException("Geçersiz fotoğraf yolu")
+                        val kind = budget.enter(e.name)
+                        if (kind == RestoreGuard.Kind.PHOTO) {
+                            RestoreGuard.photoRelativePath(e.name)
                             photos++
                         }
-                        val bos = if (isRoster || isManifest) java.io.ByteArrayOutputStream() else null
-                        var size = 0L
+                        val keep = kind == RestoreGuard.Kind.ROSTER || kind == RestoreGuard.Kind.MANIFEST
+                        val bos = if (keep) java.io.ByteArrayOutputStream() else null
                         while (true) {
                             val n = zip.read(sink)
                             if (n < 0) break
-                            size += n
-                            totalBytes += n
-                            if (totalBytes > RESTORE_MAX_TOTAL) throw IOException("Yedek toplam boyut sınırını aşıyor")
-                            if ((isRoster || isManifest) && size > RESTORE_MAX_ROSTER) throw IOException("Liste veya manifest dosyası beklenenden büyük")
-                            if (isPhoto && size > RESTORE_MAX_PHOTO) throw IOException("Fotoğraf dosyası beklenenden büyük")
+                            budget.add(n)
                             bos?.write(sink, 0, n)
                         }
-                        if (isRoster) json = bos?.toString("UTF-8")
-                        else if (isManifest) manifest = bos?.toString("UTF-8")
+                        if (kind == RestoreGuard.Kind.ROSTER) json = bos?.toString("UTF-8")
+                        else if (kind == RestoreGuard.Kind.MANIFEST) manifest = bos?.toString("UTF-8")
                     }
                 }
             } ?: throw IOException("Dosya açılamadı")
@@ -1103,10 +1091,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                         var json: String? = null
                         var manifestText: String? = null
                         var photoEntries = 0
-                        var count = 0
                         var skipped = 0
-                        var total = 0L
-                        val seen = HashSet<String>()
+                        val budget = RestoreGuard.Budget()
                         try {
                             val input = ctx.contentResolver.openInputStream(uri) ?: throw IOException("Yedek dosyası açılamadı")
                             java.util.zip.ZipInputStream(input).use { zip ->
@@ -1114,54 +1100,30 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                                 while (true) {
                                     val entry = zip.nextEntry ?: break
                                     if (entry.isDirectory) continue
-                                    if (++count > RESTORE_MAX_ENTRIES) throw IOException("Yedekte çok fazla dosya var")
-                                    if (!seen.add(entry.name)) throw IOException("Yedekte yinelenen dosya yolu: ${entry.name}")
-
-                                    val isRoster = entry.name == "roster.json"
-                                    val isManifest = entry.name == "yedek.json"
-                                    val isPhoto = entry.name.startsWith("photos/")
-                                    if (!isRoster && !isManifest && !isPhoto) {
-                                        // Tanınmayan içerik de toplam boyut sınırına dahildir.
+                                    val kind = budget.enter(entry.name)
+                                    if (kind == RestoreGuard.Kind.OTHER) {
+                                        // Tanınmayan içerik yazılmaz; yalnızca toplam boyut sınırına dahildir.
                                         while (true) {
                                             val n = zip.read(buf)
                                             if (n < 0) break
-                                            total += n
-                                            if (total > RESTORE_MAX_TOTAL) throw IOException("Yedek toplam boyut sınırını aşıyor")
+                                            budget.add(n)
                                         }
                                         continue
                                     }
+                                    val isPhoto = kind == RestoreGuard.Kind.PHOTO
                                     if (isPhoto) photoEntries++
-
-                                    val limit = if (isRoster || isManifest) RESTORE_MAX_ROSTER else RESTORE_MAX_PHOTO
-                                    val target = if (isPhoto) {
-                                        val relative = entry.name.removePrefix("photos/")
-                                        if (relative.isBlank() || relative.startsWith('/') || relative.contains('\\') ||
-                                            relative.split('/').any { it.isBlank() || it == "." || it == ".." }
-                                        ) throw IOException("Yedekte geçersiz fotoğraf yolu")
-                                        File(newDir, relative).canonicalFile.also {
-                                            val root = newDir.canonicalFile
-                                            if (!it.path.startsWith(root.path + File.separator)) {
-                                                throw IOException("Yedekte geçersiz dosya yolu: ${entry.name}")
-                                            }
-                                        }
-                                    } else null
+                                    val target = if (isPhoto) RestoreGuard.safeTarget(newDir, RestoreGuard.photoRelativePath(entry.name)) else null
                                     target?.parentFile?.mkdirs()
-                                    val sink: java.io.OutputStream = target?.outputStream()
-                                        ?: java.io.ByteArrayOutputStream()
-                                    var size = 0L
+                                    val sink: java.io.OutputStream = target?.outputStream() ?: java.io.ByteArrayOutputStream()
                                     sink.use { output ->
                                         while (true) {
                                             val n = zip.read(buf)
                                             if (n < 0) break
-                                            size += n
-                                            total += n
-                                            if (size > limit || total > RESTORE_MAX_TOTAL) {
-                                                throw IOException("Yedek boyut sınırını aşıyor; geri yükleme durduruldu")
-                                            }
+                                            budget.add(n)
                                             output.write(buf, 0, n)
                                         }
-                                        if (isRoster) json = (output as java.io.ByteArrayOutputStream).toString("UTF-8")
-                                        if (isManifest) manifestText = (output as java.io.ByteArrayOutputStream).toString("UTF-8")
+                                        if (kind == RestoreGuard.Kind.ROSTER) json = (output as java.io.ByteArrayOutputStream).toString("UTF-8")
+                                        if (kind == RestoreGuard.Kind.MANIFEST) manifestText = (output as java.io.ByteArrayOutputStream).toString("UTF-8")
                                     }
 
                                     if (target != null) {
@@ -1187,7 +1149,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                             ) throw IOException("Yedek özeti ile dosya içeriği uyuşmuyor")
                             val stagedRoster = store.prepare(parsed)
                             RestoreTransaction.commit(ctx, store, newDir, stagedRoster)
-                            Triple(parsed, skipped, count)
+                            Triple(parsed, skipped, budget.entries())
                         } catch (e: Throwable) {
                             newDir.deleteRecursively()
                             preparedRoster.delete()
@@ -1655,7 +1617,3 @@ private const val ORIG_MAX_SIDE = 1600
 private const val ORIG_MAX_BYTES = 900_000
 
 
-private const val RESTORE_MAX_ENTRIES = 50_000
-private const val RESTORE_MAX_PHOTO = 5L * 1024 * 1024
-private const val RESTORE_MAX_ROSTER = 30L * 1024 * 1024
-private const val RESTORE_MAX_TOTAL = 800L * 1024 * 1024
