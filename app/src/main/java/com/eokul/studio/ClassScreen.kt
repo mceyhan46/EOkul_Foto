@@ -97,28 +97,28 @@ fun ClassScreen(studio: StudioViewModel, classId: String) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Surface(color = MaterialTheme.colorScheme.primaryContainer, tonalElevation = 2.dp) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest, shadowElevation = 1.dp) {
                 Column(
                     Modifier.windowInsetsPadding(WindowInsets.statusBars)
                         .fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        BackBtn(onClick = { studio.back() }, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        BackBtn(onClick = { studio.back() }, tint = MaterialTheme.colorScheme.onSurface)
                         Column(Modifier.weight(1f)) {
                             Text(
                                 cls.name, style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer
+                                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 "${cls.capturedCount}/${cls.students.size} fotoğraf çekildi",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         TextButton(onClick = { addOpen = true }) { Text("＋ Öğrenci") }
                         TextButton(onClick = { studio.navigate(Screen.Import(cls.id)) }) { Text("📋 Liste") }
                         Box {
-                            MoreBtn(onClick = { toolsOpen = true }, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            MoreBtn(onClick = { toolsOpen = true }, tint = MaterialTheme.colorScheme.onSurface)
                             DropdownMenu(expanded = toolsOpen, onDismissRequest = { toolsOpen = false }) {
                                 DropdownMenuItem(text = { Text("Kontrol sayfası (ızgara)") }, onClick = {
                                     toolsOpen = false

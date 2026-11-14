@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Uygulama genelinde TEK düğme standardı (ölçüler ve roller):
- *  - Yükseklik 52 dp (başparmak için rahat), köşe 14 dp, yazı 15 sp yarı kalın, simge 20 dp.
+ *  - Yükseklik 52 dp (başparmak için rahat), köşe 16 dp, yazı 15 sp yarı kalın, simge 20 dp.
  *  - Birincil  : dolu, ana renk      → ekranın TEK ana eylemi (Kaydet, Fotoğraf çek, Uygula)
  *  - İkincil   : dolu, nötr yüzey    → yan eylemler (Kırpmayı düzenle, Önceki/Sonraki)
  *  - Tehlike   : çerçeveli, kırmızı  → geri alınması zor / vazgeçme eylemleri (Yeniden çek, İptal)
@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.sp
 enum class BtnStyle { Primary, Secondary, Danger, Tertiary }
 
 val BtnHeight = 52.dp
-private val BtnShape = RoundedCornerShape(14.dp)
+private val BtnShape = RoundedCornerShape(16.dp)
 private val BtnPad = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
 private val DangerRed = Color(0xFFE5645F)
 private val DarkSurface = Color(0xFF2A3042)

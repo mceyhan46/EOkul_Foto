@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
@@ -81,71 +83,105 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Tasarım belirteçleri (açık/koyu). Vurgu rengi tek: mavi; yeşil/amber/kırmızı yalnızca durum bildirir.
+ * Metin/zemin çiftleri 4,5:1 ve üzeri hedeflenir. Koyu temada saf siyah yerine lacivert zemin kullanılır.
+ */
 private val LightScheme = lightColorScheme(
-    primary = Color(0xFF1F4E9C),
+    primary = Color(0xFF2F5FC4),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDCE6F7),
-    onPrimaryContainer = Color(0xFF0B1F44),
-    secondary = Color(0xFF4A6286),
+    primaryContainer = Color(0xFFDCE7FB),
+    onPrimaryContainer = Color(0xFF0F2A66),
+    secondary = Color(0xFF566277),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFE3E9F3),
-    onSecondaryContainer = Color(0xFF14233D),
-    tertiaryContainer = Color(0xFFFFEBC9),
-    onTertiaryContainer = Color(0xFF4A3000),
-    background = Color(0xFFF3F5F9),
-    onBackground = Color(0xFF1A1F2B),
-    surface = Color(0xFFF3F5F9),
-    onSurface = Color(0xFF1A1F2B),
-    surfaceVariant = Color(0xFFE6EAF1),
-    onSurfaceVariant = Color(0xFF4B5565),
+    secondaryContainer = Color(0xFFE4EAF5),
+    onSecondaryContainer = Color(0xFF0F1B2D),
+    tertiary = Color(0xFF92400E),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFFCEBCB),
+    onTertiaryContainer = Color(0xFF5A2A06),
+    background = Color(0xFFF4F7FB),
+    onBackground = Color(0xFF0F1B2D),
+    surface = Color(0xFFF4F7FB),
+    onSurface = Color(0xFF0F1B2D),
+    surfaceVariant = Color(0xFFE7EDF7),
+    onSurfaceVariant = Color(0xFF566277),
     surfaceContainerLowest = Color(0xFFFFFFFF),
     surfaceContainerLow = Color(0xFFFFFFFF),
     surfaceContainer = Color(0xFFFFFFFF),
-    surfaceContainerHigh = Color(0xFFEEF1F6),
+    surfaceContainerHigh = Color(0xFFEEF2F9),
     surfaceContainerHighest = Color(0xFFFFFFFF),
-    outline = Color(0xFF8792A3),
-    outlineVariant = Color(0xFFD3D9E3)
+    outline = Color(0xFF7C889C),
+    outlineVariant = Color(0xFFD5DDEA),
+    error = Color(0xFFB91C1C),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFBE0E0),
+    onErrorContainer = Color(0xFF5F1111)
 )
 
 private val DarkScheme = darkColorScheme(
-    primary = Color(0xFF8FB4F5),
-    onPrimary = Color(0xFF0A2552),
-    primaryContainer = Color(0xFF1B3A6B),
+    primary = Color(0xFF8CAEFF),
+    onPrimary = Color(0xFF0B1E4A),
+    primaryContainer = Color(0xFF22345C),
     onPrimaryContainer = Color(0xFFD9E6FF),
-    secondary = Color(0xFFB0C3E3),
-    onSecondary = Color(0xFF1A2C4A),
-    secondaryContainer = Color(0xFF243247),
-    onSecondaryContainer = Color(0xFFD5E0F2),
-    tertiaryContainer = Color(0xFF4A3A12),
+    secondary = Color(0xFFA5B0C5),
+    onSecondary = Color(0xFF14203A),
+    secondaryContainer = Color(0xFF1F2A41),
+    onSecondaryContainer = Color(0xFFE8EDF7),
+    tertiary = Color(0xFFFBBF24),
+    onTertiary = Color(0xFF3A2A00),
+    tertiaryContainer = Color(0xFF3A2E12),
     onTertiaryContainer = Color(0xFFFFE2A8),
-    background = Color(0xFF0E1420),
-    onBackground = Color(0xFFE3E8F1),
-    surface = Color(0xFF0E1420),
-    onSurface = Color(0xFFE3E8F1),
-    surfaceVariant = Color(0xFF232D3F),
-    onSurfaceVariant = Color(0xFFA9B3C4),
-    surfaceContainerLowest = Color(0xFF0A0F19),
-    surfaceContainerLow = Color(0xFF131B29),
-    surfaceContainer = Color(0xFF161F2F),
-    surfaceContainerHigh = Color(0xFF1C2638),
-    surfaceContainerHighest = Color(0xFF1A2434),
-    outline = Color(0xFF6B7689),
-    outlineVariant = Color(0xFF2B3649)
+    background = Color(0xFF0E1524),
+    onBackground = Color(0xFFE8EDF7),
+    surface = Color(0xFF0E1524),
+    onSurface = Color(0xFFE8EDF7),
+    surfaceVariant = Color(0xFF1F2A41),
+    onSurfaceVariant = Color(0xFFA5B0C5),
+    surfaceContainerLowest = Color(0xFF0B101C),
+    surfaceContainerLow = Color(0xFF131C2E),
+    surfaceContainer = Color(0xFF172033),
+    surfaceContainerHigh = Color(0xFF1C2740),
+    surfaceContainerHighest = Color(0xFF172033),
+    outline = Color(0xFF7D8AA3),
+    outlineVariant = Color(0xFF2B3852),
+    error = Color(0xFFFCA5A5),
+    onError = Color(0xFF3B0A0A),
+    errorContainer = Color(0xFF3E1D22),
+    onErrorContainer = Color(0xFFFFD9D9)
 )
 
-/** Sade köşeler: kartlar 12 dp, düğmeler/alanlar 8 dp. Gölge yok; kartlar zemin renginden ayrılır. */
+/** Yumuşak köşeler: etiket 8, alan 12, kart 16, büyük yüzey 20 dp. Gölge yok; kartlar ince çerçeveyle ayrılır. */
 private val AppShapes = androidx.compose.material3.Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-    large = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+    small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+    large = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
 )
+
+/** Tipografi hiyerarşisi: sayı/başlık kalın, gövde 15, ikincil 13, etiket 12 sp (12 sp altına inilmez). */
+private val AppTypography = androidx.compose.material3.Typography().let { t ->
+    t.copy(
+        headlineMedium = t.headlineMedium.copy(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold),
+        titleLarge = t.titleLarge.copy(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold),
+        titleMedium = t.titleMedium.copy(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
+        titleSmall = t.titleSmall.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold),
+        bodyLarge = t.bodyLarge.copy(fontSize = 16.sp, lineHeight = 24.sp),
+        bodyMedium = t.bodyMedium.copy(fontSize = 15.sp, lineHeight = 21.sp),
+        bodySmall = t.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp),
+        labelLarge = t.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+        labelMedium = t.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+        labelSmall = t.labelSmall.copy(fontSize = 12.sp)
+    )
+}
 
 @Composable
 fun EOkulTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = if (isSystemInDarkTheme()) DarkScheme else LightScheme,
         shapes = AppShapes,
+        typography = AppTypography,
         content = content
     )
 }

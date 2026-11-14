@@ -105,16 +105,16 @@ fun ImportScreen(studio: StudioViewModel, classId: String?) {
     val valid = result?.valid() ?: emptyList()
 
     Column(Modifier.fillMaxSize()) {
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, tonalElevation = 2.dp) {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest, shadowElevation = 1.dp) {
             Row(
                 Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BackBtn(onClick = { studio.back() }, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                BackBtn(onClick = { studio.back() }, tint = MaterialTheme.colorScheme.onSurface)
                 Text(
                     if (cls != null) "${cls.name} · Liste ekle" else "Yeni sınıf · Liste ekle",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }

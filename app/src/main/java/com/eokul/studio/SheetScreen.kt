@@ -93,17 +93,17 @@ fun SheetScreen(studio: StudioViewModel, classId: String) {
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, tonalElevation = 2.dp) {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest, shadowElevation = 1.dp) {
             Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                BackBtn(onClick = { studio.back() }, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                BackBtn(onClick = { studio.back() }, tint = MaterialTheme.colorScheme.onSurface)
                 Column(Modifier.weight(1f)) {
                     Text(
                         "${cls.name} · kontrol", style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer
+                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         "${cls.capturedCount}/${cls.students.size} fotoğraf",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 FilterChip(

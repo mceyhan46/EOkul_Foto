@@ -135,21 +135,21 @@ fun MultiImportScreen(studio: StudioViewModel) {
     val canImport = list != null && !emptyName && !dupName && total > 0
 
     Column(Modifier.fillMaxSize()) {
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, tonalElevation = 2.dp) {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest, shadowElevation = 1.dp) {
             Row(
                 Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BackBtn(onClick = { studio.back() }, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                BackBtn(onClick = { studio.back() }, tint = MaterialTheme.colorScheme.onSurface)
                 Column(Modifier.weight(1f)) {
                     Text(
                         "Çoklu sınıf listesi", style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer
+                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         "Tek Excel dosyasından tüm sınıfları ve öğrencileri ekleyin",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
                 }
             }
