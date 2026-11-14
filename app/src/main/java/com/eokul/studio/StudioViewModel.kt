@@ -990,6 +990,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 .put("classes", snap.size)
                 .put("students", snap.sumOf { it.students.size })
                 .put("captured", captured)
+                .put("cropBoxes", snap.sumOf { c -> c.students.count { it.box != null } })
                 .put("photos", photos.size)
                 .toString()
             val n = artifactName(prefix, "zip")
@@ -1060,7 +1061,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 val name = writeBackup(root, snap, "Yedek")
                 Ops.log("op", "name", "backup", "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tb, "n", name.second)
                 SettingsState.update(settings.copy(lastBackupMs = System.currentTimeMillis()))
-                say("✓ Yedek alındı ve doğrulandı: ${name.first}\n${name.second} fotoğraf · ${name.third} çekilmiş öğrenci.\n" +
+                say("✓ Yedek alındı ve doğrulandı: ${name.first}\n${name.second} fotoğraf · ${name.third} çekilmiş öğrenci · ${snap.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı.\n" +
                     "Dosya kayıt klasöründe durur; uygulamayı silseniz de kalır. Tam çözünürlüklü orijinaller yedeğe girmez, kayıt klasöründe kalır.")
                 }
             } catch (e: CancellationException) {
@@ -1185,7 +1186,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 classes.addAll(restored.first)
                 rosterVersion.incrementAndGet()
                 say(
-                    "✓ ${restored.first.size} sınıf geri yüklendi" +
+                    "✓ ${restored.first.size} sınıf geri yüklendi · ${restored.first.sumOf { c -> c.students.count { it.captured } }} çekilmiş öğrenci · " +
+                        "${restored.first.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı" +
                         (if (restored.second > 0) " (${restored.second} bozuk fotoğraf atlandı)" else "") +
                         (if (safety != null) "\nÖnceki verinizin güvenlik kopyası: $safety" else "")
                 )

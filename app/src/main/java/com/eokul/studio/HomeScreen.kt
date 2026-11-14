@@ -3,6 +3,7 @@ package com.eokul.studio
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -273,29 +274,39 @@ private fun SummaryCard(studio: StudioViewModel) {
     else "Yedek " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
     val stale = done > 0 && (last == 0L || System.currentTimeMillis() - last > 7L * 24 * 3600 * 1000)
     val frac = if (total == 0) 0f else done.toFloat() / total
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp)) {
+    val fg = MaterialTheme.colorScheme.onPrimary
+    val dark = androidx.compose.foundation.isSystemInDarkTheme()
+    // Dolgulu mavi blok: sınıf kartlarından (beyaz) ayrı, genel bir özet olduğu hemen anlaşılır.
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 androidx.compose.ui.text.buildAnnotatedString {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp)) { append("$done") }
-                    withStyle(SpanStyle(color = muted)) { append(" / $total çekildi") }
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp)) { append("$done") }
+                    withStyle(SpanStyle(color = fg.copy(alpha = 0.85f))) { append(" / $total çekildi") }
                 },
+                color = fg,
                 modifier = Modifier.weight(1f)
             )
-            Text("%${(frac * 100).toInt()}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("%${(frac * 100).toInt()}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = fg)
         }
-        Spacer(Modifier.size(6.dp))
+        Spacer(Modifier.size(8.dp))
         LinearProgressIndicator(
             progress = { frac },
+            color = fg,
+            trackColor = fg.copy(alpha = 0.28f),
             modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
         )
-        Spacer(Modifier.size(6.dp))
+        Spacer(Modifier.size(8.dp))
         Text(
             "${classes.size} sınıf · $missing eksik" + (if (retake > 0) " · $retake tekrar" else "") +
                 " · $backupText" + (if (stale) " (yedek önerilir)" else ""),
             style = MaterialTheme.typography.bodySmall,
-            color = if (stale) WarnOrange else muted
+            color = if (stale) (if (dark) Color(0xFF5A3A00) else Color(0xFFFFE08A)) else fg.copy(alpha = 0.85f)
         )
     }
 }
