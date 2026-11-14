@@ -14,7 +14,7 @@ android {
         // CI'da her çalıştırma numarası sürüm kodunu artırır; yerelde 1.
         val runNo = System.getenv("VERSION_CODE")?.toIntOrNull() ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionCode = runNo
-        versionName = System.getenv("VERSION_NAME") ?: "1.0.$runNo"
+        versionName = System.getenv("VERSION_NAME") ?: "1.1.$runNo"
         // Yalnızca modern telefon mimarisi: x86/armeabi-v7a yerel kütüphaneleri APK'yı şişirir.
         ndk { abiFilters += listOf("arm64-v8a") }
     }

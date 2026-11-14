@@ -174,3 +174,6 @@ EditSession.zoomOnFace: Yakin/Uzak dugmeleri kutuyu kutu merkezi yerine en yakin
 
 ## Yakin/Uzak: ust kenar sabit (14 Kas)
 zoomOnFace: kutunun ust kenari sabit (bas ustu bosluk degismez), yatayda yuz merkezi etrafinda olcek. Yakinlasirken cene (y2*1.03) ve yuz genisligi (x1.15) kadraj disina cikmaz; sinirda dugme etkisiz. Uzaklasirken alt sinir asilirsa fitInside ile gerektigi kadar yukari kayar.
+
+## Surum numaralandirma (14 Kas)
+versionName 1.1.<run_number>; versionCode = run_number + 1000 (eski kurulum 93 idi, yeni depoda run_number sifirdan basladigi icin kurulum "surum dusuk" hatasi veriyordu). Sonraki surumler hep artar.

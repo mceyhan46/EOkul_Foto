@@ -45,10 +45,10 @@ jobs:
           elif [[ -n "$INPUT_VERSION" ]]; then
             NAME="$INPUT_VERSION"
           else
-            NAME="1.0.${{ github.run_number }}"
+            NAME="1.1.${{ github.run_number }}"
           fi
           NAME="$(printf '%s' "$NAME" | tr -c 'A-Za-z0-9._-' '_')"
-          CODE="${{ github.run_number }}"
+          CODE="$(( ${{ github.run_number }} + 1000 ))"  # eski kurulumun (93) üstünde kalsın; sürüm düşürme hatasını önler
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "### Sürüm: \`$NAME\` (code \`$CODE\`)" >> "$GITHUB_STEP_SUMMARY"
