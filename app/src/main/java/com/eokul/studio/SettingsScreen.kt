@@ -40,20 +40,11 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolean, onClose: () -> Unit) {
     BackHandler { if (!studio.isRestoring) onClose() }
-    var confirmRestore by remember { mutableStateOf<Uri?>(null) }
-    var restoreInfo by remember { mutableStateOf<StudioViewModel.BackupInfo?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var advanced by remember { mutableStateOf(false) }
     var sideGaps by remember { mutableStateOf(false) }
     var pinOpen by remember { mutableStateOf(false) }
-    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) scope.launch {
-            // Önce içeriğine bakılır: geçerli bir yedek değilse hiçbir şey değişmeden uyarı verilir.
-            val info = studio.inspectBackup(uri)
-            if (info == null) studio.toast("Bu dosya geçerli bir yedek değil (roster.json ve sınıf listesi bulunamadı). Mevcut veriye dokunulmadı.")
-            else { restoreInfo = info; confirmRestore = uri }
-        }
-    }
+    val startRestore = rememberRestoreFlow(studio)
     val reportSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
         if (uri != null) studio.saveReportTo(uri)
     }
@@ -400,7 +391,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             AppButton("Yedekle", onClick = { studio.backup() }, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
             AppButton(
                 "Geri yükle",
-                onClick = { restorePicker.launch(arrayOf("application/zip", "application/octet-stream")) },
+                onClick = startRestore,
                 style = BtnStyle.Secondary, modifier = Modifier.weight(1f)
             )
         }
@@ -479,38 +470,6 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
     }
 
     if (pinOpen) PinDialog(studio, vm.settings.pinHash != null) { pinOpen = false }
-
-    val rs = confirmRestore
-    if (rs != null) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { confirmRestore = null },
-            title = { Text("Yedekten geri yüklensin mi?") },
-            text = {
-                val ri = restoreInfo
-                val dateFmt = java.text.SimpleDateFormat("d MMM yyyy HH:mm", java.util.Locale.forLanguageTag("tr"))
-                Text(
-                    (if (ri != null)
-                        "Yedekte: ${ri.classes} sınıf · ${ri.students} öğrenci (${ri.captured} fotoğraflı · ${ri.retake} tekrar işaretli)" +
-                            (ri.createdMs?.let { " · " + dateFmt.format(java.util.Date(it)) } ?: "") +
-                            (if (ri.appVersion.isNotBlank()) " · sürüm ${ri.appVersion}" else "") + "\n"
-                    else "") +
-                        "Şu an uygulamada: ${studio.classes.size} sınıf · ${studio.classes.sumOf { it.students.size }} öğrenci\n\n" +
-                        "Uygulamadaki tüm sınıf listeleri ve küçük fotoğraflar yedekteki ile DEĞİŞTİRİLİR. " +
-                        "Değiştirmeden önce mevcut verinin ayrı bir kopyası (EOkulStudio_GeriYuklemeOncesi_….zip) kayıt klasörüne otomatik alınır."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !studio.isRestoring,
-                    onClick = {
-                        confirmRestore = null
-                        studio.restore(rs)
-                    }
-                ) { Text(if (studio.isRestoring) "Yükleniyor…" else "Geri yükle") }
-            },
-            dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Vazgeç") } }
-        )
-    }
 }
 
 /** Ayarlar bölümü: başlık, kısa açıklama ve içerik tek, sade kartta. */
