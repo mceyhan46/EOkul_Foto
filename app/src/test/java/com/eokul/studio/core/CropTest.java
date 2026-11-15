@@ -207,4 +207,32 @@ public class CropTest {
         double[] box = {0, 0, 1000 * R, 1000};                           // görüntü yüksekliği = kutu
         assertNull(Crop.zoomAnchored(box, 300, 800, 150, 1.06, 2000, 1000, R));
     }
+
+    @Test
+    public void faceCenterX_oncelikGozOrtasi() {
+        double[] face = {400, 300, 600, 560};   // kutu ortası 500
+        double[] eyes = {450, 380, 540, 380};   // göz ortası 495
+        assertEquals(495.0, Crop.faceCenterX(face, eyes, 520), 1e-9);
+        assertEquals(520.0, Crop.faceCenterX(face, null, 520), 1e-9);   // göz yok: burun
+        assertEquals(500.0, Crop.faceCenterX(face, null, Double.NaN), 1e-9);   // hiçbiri yok: kutu
+    }
+
+    @Test
+    public void faceCenterX_supheliNoktaKutuOrtasinaDoner() {
+        double[] face = {400, 300, 600, 560};   // genişlik 200, eşik 50
+        assertEquals(500.0, Crop.faceCenterX(face, new double[]{300, 380, 380, 380}, Double.NaN), 1e-9);
+        assertEquals(500.0, Crop.faceCenterX(face, null, 700), 1e-9);
+        assertEquals(549.0, Crop.faceCenterX(face, new double[]{500, 380, 598, 380}, Double.NaN), 1e-9);   // sapma 49 < 50
+    }
+
+    @Test
+    public void defaultCropBox_merkezNoktasiYatayKonumuKaydirir() {
+        Crop.Params p = new Crop.Params();
+        double[] face = {900, 500, 1100, 780};
+        double[] a = Crop.defaultCropBox(2592, 1944, face, 440, p);
+        double[] b = Crop.defaultCropBox(2592, 1944, face, 440, p, 1030);
+        assertEquals(a[1], b[1], 1e-9);   // dikey (baş üstü boşluğu) aynı
+        assertEquals(a[3], b[3], 1e-9);
+        assertEquals(30.0, ((b[0] + b[2]) - (a[0] + a[2])) / 2.0, 1e-6);   // kutu 30 px sağa kaydı
+    }
 }

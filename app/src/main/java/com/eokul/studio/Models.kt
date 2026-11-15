@@ -38,13 +38,9 @@ data class FaceInfo(val box: Box, val headTop: Double, val trusted: Boolean = fa
     /** Burun ucu x koordinatı (çalışma görüntüsü); algılanamadıysa NaN. */
     val noseX: Double = Double.NaN
 ) {
-    /** Yüzün yatay merkezi: önce burun, yoksa göz ortası, yoksa yüz kutusu merkezi. */
+    /** Yüzün yatay merkezi: göz ortası, yoksa burun, yoksa kutu ortası (bkz. Crop.faceCenterX). */
     val centerX: Double
-        get() = when {
-            !noseX.isNaN() -> noseX
-            eyes != null -> (eyes[0] + eyes[2]) / 2.0
-            else -> box.cx
-        }
+        get() = Crop.faceCenterX(box.toArray(), eyes, noseX)
 }
 
 data class PhotoItem(

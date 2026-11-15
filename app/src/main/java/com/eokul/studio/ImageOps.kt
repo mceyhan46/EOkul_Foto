@@ -278,7 +278,7 @@ object ImageOps {
     fun defaultBox(w: Int, h: Int, face: FaceInfo?, s: Settings): Box {
         val p = s.cropParams()
         if (face != null && face.trusted) p.hairMin = 0.01   // ölçülen saç tepesi olduğu gibi kullanılır
-        return Box.of(Crop.defaultCropBox(w, h, face?.box?.toArray(), face?.headTop ?: Double.NaN, p))
+        return Box.of(Crop.defaultCropBox(w, h, face?.box?.toArray(), face?.headTop ?: Double.NaN, p, face?.centerX ?: Double.NaN))
     }
 
     fun thumb(pixels: IntArray, w: Int, h: Int, box: Box): Bitmap {

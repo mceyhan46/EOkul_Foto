@@ -26,6 +26,11 @@ public final class Framing {
      * @param box     {x1,y1,x2,y2} kırpma alanı
      */
     public static List<String> check(double[] face, double headTop, double[] eyes, double[] box) {
+        return check(face, headTop, eyes, box, Double.NaN);
+    }
+
+    /** [centerX] yüzün yatay merkezi (Crop.faceCenterX); NaN ise yüz kutusu ortası. */
+    public static List<String> check(double[] face, double headTop, double[] eyes, double[] box, double centerX) {
         List<String> out = new ArrayList<>();
         double w = box[2] - box[0], h = box[3] - box[1];
         if (w <= 0 || h <= 0) return out;
@@ -36,7 +41,7 @@ public final class Framing {
         double fh = (face[3] - face[1]) / h;
         if (fh < 0.30) out.add(FACE_SMALL);
         else if (fh > 0.72) out.add(FACE_LARGE);
-        double cx = (face[0] + face[2]) / 2.0, bx = (box[0] + box[2]) / 2.0;
+        double cx = Double.isNaN(centerX) ? (face[0] + face[2]) / 2.0 : centerX, bx = (box[0] + box[2]) / 2.0;
         if (Math.abs(cx - bx) > 0.15 * w) out.add(OFF_CENTER);
         if (eyes != null && eyes.length == 4) {
             double ey = ((eyes[1] + eyes[3]) / 2.0 - box[1]) / h;

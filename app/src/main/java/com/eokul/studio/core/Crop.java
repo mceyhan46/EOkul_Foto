@@ -119,7 +119,33 @@ public final class Crop {
         return Math.min(vertical, horizontal);
     }
 
+    /** Göz ortasının yüz kutusu ortasından en fazla bu kadar (yüz genişliği oranında) sapmasına güvenilir. */
+    public static final double CENTER_TRUST = 0.25;
+
+    /**
+     * Yüzün yatay merkezi. Öncelik: iki gözün x ortası; yoksa burun; yoksa yüz kutusu ortası.
+     * Seçilen nokta kutu ortasından yüz genişliğinin {@link #CENTER_TRUST} katından fazla sapıyorsa
+     * (yanlış tespit olasılığı) kutu ortası kullanılır.
+     *
+     * @param eyes  {solX, solY, sağX, sağY} veya null
+     * @param noseX burun x'i veya NaN
+     */
+    public static double faceCenterX(double[] face, double[] eyes, double noseX) {
+        double boxCx = (face[0] + face[2]) / 2.0;
+        double w = Math.max(1.0, face[2] - face[0]);
+        double c = Double.NaN;
+        if (eyes != null && eyes.length == 4) c = (eyes[0] + eyes[2]) / 2.0;
+        else if (!Double.isNaN(noseX)) c = noseX;
+        if (Double.isNaN(c) || Math.abs(c - boxCx) > CENTER_TRUST * w) return boxCx;
+        return c;
+    }
+
     public static double[] defaultCropBox(int iw, int ih, double[] face, double headTop, Params p) {
+        return defaultCropBox(iw, ih, face, headTop, p, Double.NaN);
+    }
+
+    /** [centerX] yüzün yatay merkezi (bkz. faceCenterX); NaN ise yüz kutusu ortası. */
+    public static double[] defaultCropBox(int iw, int ih, double[] face, double headTop, Params p, double centerX) {
         double ratio = p.ratio();
         if (face == null) {
             double cw = Math.min(iw, ih * ratio) * 0.85;
@@ -127,7 +153,7 @@ public final class Crop {
         }
         double fy1 = face[1], fy2 = face[3];
         double u = faceUnit(face);
-        double cx = (face[0] + face[2]) / 2.0;
+        double cx = Double.isNaN(centerX) ? (face[0] + face[2]) / 2.0 : centerX;
 
         double top0 = Double.isNaN(headTop) ? fy1 - u * p.hairAllowance : headTop;
         top0 = Math.min(top0, fy1 - u * p.hairMin);

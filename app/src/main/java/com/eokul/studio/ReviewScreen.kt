@@ -197,7 +197,7 @@ fun ReviewScreen(studio: StudioViewModel) {
                     com.eokul.studio.core.Lighting.GLARE ->
                         soft("ℹ Yüzde parlama / patlak bölge var — doğrudan ışıktan uzaklaşın.")
                 }
-                for (code in com.eokul.studio.core.Framing.check(f0.box.toArray(), f0.headTop, f0.eyes, s.box.toArray())) {
+                for (code in com.eokul.studio.core.Framing.check(f0.box.toArray(), f0.headTop, f0.eyes, s.box.toArray(), f0.centerX)) {
                     val isHard = code == com.eokul.studio.core.Framing.HEAD_CUT || code == com.eokul.studio.core.Framing.CHIN_CUT
                     val msg =
                         when (code) {
