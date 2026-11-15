@@ -1,6 +1,17 @@
 package com.eokul.studio
 
 import android.net.Uri
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import kotlinx.coroutines.launch
@@ -84,7 +95,7 @@ fun HomeScreen(studio: StudioViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconBtn(
-                            androidx.compose.material.icons.Icons.Filled.Menu, "Menü",
+                            Icons.Filled.Menu, "Menü",
                             { scope.launch { drawerState.open() } },
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
@@ -425,17 +436,17 @@ private fun HomeDrawer(studio: StudioViewModel, closeThen: (() -> Unit) -> Unit,
                 )
             }
             Spacer(Modifier.size(8.dp))
-            DrawerItem("Ana sayfa", androidx.compose.material.icons.Icons.Filled.Home, selected = true, enabled = true) { closeThen {} }
-            DrawerItem("Çoklu sınıf listesi (Excel)", androidx.compose.material.icons.Icons.AutoMirrored.Filled.List) { closeThen { studio.navigate(Screen.MultiImport) } }
-            DrawerItem("Toplu kırpma", androidx.compose.material.icons.Icons.Filled.Edit) { closeThen { studio.navigate(Screen.Batch) } }
+            DrawerItem("Ana sayfa", Icons.Filled.Home, selected = true, enabled = true) { closeThen {} }
+            DrawerItem("Çoklu sınıf listesi (Excel)", Icons.AutoMirrored.Filled.List) { closeThen { studio.navigate(Screen.MultiImport) } }
+            DrawerItem("Toplu kırpma", Icons.Filled.Edit) { closeThen { studio.navigate(Screen.Batch) } }
             DrawerGroup("Yedek ve veri")
-            DrawerItem("Yedekle", androidx.compose.material.icons.Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring) { closeThen { studio.backup() } }
-            DrawerItem("Yedekten geri yükle", androidx.compose.material.icons.Icons.Filled.Refresh, enabled = !studio.isRestoring) { closeThen { startRestore() } }
-            DrawerItem("Tüm sınıflar ZIP (klasörlü + rapor)", androidx.compose.material.icons.Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportAllFoldersZip() } }
-            DrawerItem("Eksik klasör dosyalarını onar", androidx.compose.material.icons.Icons.Filled.Build, enabled = hasClasses) { closeThen { studio.repairFolderFiles() } }
-            DrawerItem("Veri denetimi", androidx.compose.material.icons.Icons.Filled.Search, enabled = hasClasses) { closeThen { studio.auditData() } }
+            DrawerItem("Yedekle", Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring) { closeThen { studio.backup() } }
+            DrawerItem("Yedekten geri yükle", Icons.Filled.Refresh, enabled = !studio.isRestoring) { closeThen { startRestore() } }
+            DrawerItem("Tüm sınıflar ZIP (klasörlü + rapor)", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportAllFoldersZip() } }
+            DrawerItem("Eksik klasör dosyalarını onar", Icons.Filled.Build, enabled = hasClasses) { closeThen { studio.repairFolderFiles() } }
+            DrawerItem("Veri denetimi", Icons.Filled.Search, enabled = hasClasses) { closeThen { studio.auditData() } }
             DrawerGroup("Uygulama")
-            DrawerItem("Ayarlar", androidx.compose.material.icons.Icons.Filled.Settings) { closeThen { studio.navigate(Screen.Settings) } }
+            DrawerItem("Ayarlar", Icons.Filled.Settings) { closeThen { studio.navigate(Screen.Settings) } }
             Spacer(Modifier.size(16.dp))
         }
     }
