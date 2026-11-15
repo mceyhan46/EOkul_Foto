@@ -194,3 +194,6 @@ core/CrossClass.java (+CrossClassTest, 130 test). Engellemez: ogrenci ekle/numar
 - Tüm renkler `AppColors.kt` içinde: Material şemaları, `SoftColors` (ana ekran pastelleri), `StatusColors`, `DarkUi` (koyu ekranlar), `ButtonColors`. Başka dosyada `Color(0x…)` yazılmaz.
 - "Geri yükleme öncesi" güvenlik yedeklerinden en yeni 2'si tutulur, eskileri geri yükleme sonrası otomatik silinir (`BackupRetention`). Kullanıcının "Yedekle" ile aldığı zip'lere dokunulmaz.
 - Geri yükleme onayında yedeğin sürümü, tarihi ve "tekrar işaretli" sayısı gösterilir.
+
+## Tanılama (1.1.26)
+- Rapor araçları Ayarlar > "Gelişmiş: tanılama ve rapor" altında katlı. Günlük (OpLog/Ops) hiçbir hatada çağıranı etkilemez; başlatma hatası uygulamayı açılışta durdurmaz.

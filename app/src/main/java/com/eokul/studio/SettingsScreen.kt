@@ -42,6 +42,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
     BackHandler { if (!studio.isRestoring) onClose() }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var advanced by remember { mutableStateOf(false) }
+    var diagOpen by remember { mutableStateOf(false) }
     var sideGaps by remember { mutableStateOf(false) }
     var pinOpen by remember { mutableStateOf(false) }
     val startRestore = rememberRestoreFlow(studio)
@@ -351,7 +352,11 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         }
 
         }
-        SettingsCard("Tanılama ve rapor", "Çekim ve kayıt işlemlerinin kaydı") {
+        SettingsCard("Gelişmiş: tanılama ve rapor", "Yalnızca bir sorun olduğunda gerekir") {
+            TextButton(onClick = { diagOpen = !diagOpen }) {
+                Text(if (diagOpen) "▾ Rapor araçlarını gizle" else "▸ Rapor araçlarını göster")
+            }
+            if (diagOpen) {
             Text(
                 "Uygulama çekim, puanlama, kayıt ve hataları öğrenci adı olmadan cihazda tutar. Bir sorun olduğunda raporu alıp geliştiriciye iletin; hız ve hatalar buradan analiz edilir.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -377,6 +382,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp)
             )
+            }
         }
         SettingsCard("Güvenlik ve yedek", "PIN kilidi ve yedekleme") {
         OutlinedButton(onClick = { pinOpen = true }) {

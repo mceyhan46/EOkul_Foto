@@ -66,9 +66,14 @@ public final class OpLog {
 
     /** Olay ekler; alanlar anahtar/değer çiftleri halinde: log("frame", "i", 1, "score", 88). */
     public void log(String type, Object... kv) {
-        final long t = System.currentTimeMillis();
-        final String line = format(t, type, kv);
-        io.execute(() -> append(line));
+        // Günlük hiçbir durumda çağıranı etkilememeli: biçimlendirme/yazma hatası sessizce yutulur.
+        try {
+            final long t = System.currentTimeMillis();
+            final String line = format(t, type, kv);
+            io.execute(() -> append(line));
+        } catch (Throwable ignored) {
+            // kayıt hatası uygulamayı etkilememeli
+        }
     }
 
     /** Bekleyen yazmaların bitmesini bekler (rapor almadan önce / testlerde). */
@@ -136,7 +141,7 @@ public final class OpLog {
             try (FileOutputStream o = new FileOutputStream(file, true)) {
                 o.write((line + "\n").getBytes(StandardCharsets.UTF_8));
             }
-        } catch (IOException ignored) {
+        } catch (IOException | RuntimeException ignored) {
             // kayıt hatası uygulamayı etkilememeli
         }
     }

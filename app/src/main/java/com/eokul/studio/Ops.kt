@@ -20,6 +20,15 @@ object Ops {
 
     fun init(ctx: Context) {
         if (log != null) return
+        // Tanılama hiçbir koşulda uygulamanın açılmasını engellememeli.
+        try {
+            initInternal(ctx)
+        } catch (_: Throwable) {
+            log = null
+        }
+    }
+
+    private fun initInternal(ctx: Context) {
         appCtx = ctx.applicationContext
         // Öğrenci numarası kısa kimliğe cihaza özgü rastgele tuzla çevrilir: kimlikten numara geri çıkarılamaz.
         val sp = ctx.applicationContext.getSharedPreferences("eokul_ops", Context.MODE_PRIVATE)
@@ -34,6 +43,10 @@ object Ops {
 
     /** Ayarlar anlık görüntüsüyle uygulama başlangıcı. */
     fun appStart(s: Settings) {
+        try { appStartInternal(s) } catch (_: Throwable) { }
+    }
+
+    private fun appStartInternal(s: Settings) {
         val ver = try { appCtx?.packageManager?.getPackageInfo(appCtx!!.packageName, 0)?.versionName } catch (_: Throwable) { null }
         log("app_start", "ver", ver ?: "?", "dev", "${Build.MANUFACTURER} ${Build.MODEL}", "sdk", Build.VERSION.SDK_INT,
             "hq", s.hqCapture, "flipB", s.flipCapture, "flipF", s.flipFront, "std", "${s.photoW}x${s.photoH}",
@@ -45,12 +58,17 @@ object Ops {
     }
 
     /** Öğrenci numarasının kısa, geri döndürülemeyen kimliği. */
-    fun id(no: String): String =
+    fun id(no: String): String = try {
         java.security.MessageDigest.getInstance("SHA-256").digest((salt + no).toByteArray())
             .take(3).joinToString("") { "%02x".format(it) }
+    } catch (_: Throwable) {
+        "?"
+    }
 
     fun error(where: String, t: Throwable) {
-        log("error", "where", where, "msg", (t.toString()).take(300), "mem", Diag.memInfo())
+        try {
+            log("error", "where", where, "msg", (t.toString()).take(300), "mem", Diag.memInfo())
+        } catch (_: Throwable) { }
     }
 
     /** İnceleme uyarı metninden kısa kod (rapor için). */
@@ -80,7 +98,14 @@ object Ops {
 
     fun clear() { try { log?.clear() } catch (_: Throwable) { } }
 
-    fun reportText(): String {
+    /** Rapor metni; oluşturulamazsa nedenini içeren kısa bir metin döner (istisna fırlatmaz). */
+    fun reportText(): String = try {
+        buildReport()
+    } catch (t: Throwable) {
+        "Rapor oluşturulamadı: ${t.javaClass.simpleName}"
+    }
+
+    private fun buildReport(): String {
         val l = log ?: return "Kayıt yok."
         val c = appCtx
         val ver = try { c?.packageManager?.getPackageInfo(c.packageName, 0)?.versionName } catch (_: Throwable) { null }
