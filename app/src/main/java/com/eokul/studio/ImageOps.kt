@@ -84,7 +84,8 @@ object Faces {
                                 val l = f.getLandmark(com.google.mlkit.vision.face.FaceLandmark.LEFT_EYE)?.position
                                 val r2 = f.getLandmark(com.google.mlkit.vision.face.FaceLandmark.RIGHT_EYE)?.position
                                 if (l != null && r2 != null) doubleArrayOf(l.x.toDouble(), l.y.toDouble(), r2.x.toDouble(), r2.y.toDouble()) else null
-                            }
+                            },
+                            f.getLandmark(com.google.mlkit.vision.face.FaceLandmark.NOSE_BASE)?.position?.x?.toDouble() ?: Double.NaN
                         )
                     }
                     cont.resume(boxes)
@@ -99,7 +100,7 @@ object Faces {
 }
 
 /** ML Kit yüzü: kutu + baş eğikliği (roll) ve dönüklüğü (yaw), derece. */
-class RawFace(val box: Box, val roll: Float, val yaw: Float, val eyes: DoubleArray? = null)
+class RawFace(val box: Box, val roll: Float, val yaw: Float, val eyes: DoubleArray? = null, val noseX: Double = Double.NaN)
 
 /** Kişi/arka plan maskesi (0..1 güven değerleri). */
 class PersonMask(val w: Int, val h: Int, val data: FloatArray)
@@ -263,11 +264,12 @@ object ImageOps {
             )
             // 1) kişi maskesinden ölçülen saç tepesi (en güvenilir); 2) renk/arka plan analizi; 3) yüz oranı
             val fromMask = if (mask != null) maskHeadTop(mask, b) / k else Double.NaN
+            val noseX = rf.noseX / k
             val eyes = rf.eyes?.let { e -> doubleArrayOf(e[0] / k, e[1] / k, e[2] / k, e[3] / k) }
             if (!fromMask.isNaN()) {
-                FaceInfo(box, fromMask, true, rf.roll, rf.yaw, eyes)
+                FaceInfo(box, fromMask, true, rf.roll, rf.yaw, eyes, noseX)
             } else {
-                FaceInfo(box, HeadTop.estimate(pixels, w, h, box.toArray()), false, rf.roll, rf.yaw, eyes)
+                FaceInfo(box, HeadTop.estimate(pixels, w, h, box.toArray()), false, rf.roll, rf.yaw, eyes, noseX)
             }
         }.filter { it.box.width >= 8 && it.box.height >= 8 }
             .sortedByDescending { it.box.width * it.box.height }

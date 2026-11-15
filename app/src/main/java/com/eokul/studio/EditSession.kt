@@ -75,7 +75,7 @@ class EditSession(val name: String) {
             zoom(factor, box.cx, box.cy)
             return
         }
-        val r = Crop.zoomAnchored(box.toArray(), f.box.cx, f.box.y2, f.box.width, factor, iw, ih, RATIO) ?: return
+        val r = Crop.zoomAnchored(box.toArray(), f.centerX, f.box.y2, f.box.width, factor, iw, ih, RATIO) ?: return
         push(box, true)
         box = Box.of(r)
     }

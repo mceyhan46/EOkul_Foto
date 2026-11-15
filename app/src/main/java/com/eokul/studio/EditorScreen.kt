@@ -214,8 +214,8 @@ fun EditorContent(
                             style = Stroke(width = 2f, pathEffect = dash)
                         )
                         if (i == 0) {
-                            // Yüz merkezi: küçük artı işareti (kutu merkez çizgisiyle karşılaştırmak için)
-                            val fcx = (fx1 + fx2) / 2f
+                            // Yüz merkezi (burun): küçük artı işareti; kutu merkez çizgisiyle karşılaştırmak için
+                            val fcx = tf.ox + (f.centerX * tf.scale).toFloat()
                             val fcy = (fy1 + fy2) / 2f
                             drawLine(CenterLine, Offset(fcx - 14f, fcy), Offset(fcx + 14f, fcy), strokeWidth = 3f)
                             drawLine(CenterLine, Offset(fcx, fcy - 14f), Offset(fcx, fcy + 14f), strokeWidth = 3f)
