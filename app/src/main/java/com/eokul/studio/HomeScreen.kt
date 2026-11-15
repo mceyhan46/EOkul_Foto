@@ -23,6 +23,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -141,7 +142,7 @@ fun HomeScreen(studio: StudioViewModel) {
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.size(12.dp))
-                    Button(onClick = { newClassOpen = true }) { Text("＋ İlk sınıfı ekle") }
+                    Button(onClick = { newClassOpen = true }, colors = ButtonDefaults.buttonColors(containerColor = softColors().container, contentColor = softColors().onContainer)) { Text("＋ İlk sınıfı ekle") }
                 }
             } else {
                 LazyColumn(
@@ -173,8 +174,11 @@ fun HomeScreen(studio: StudioViewModel) {
             ExtendedFloatingActionButton(
                 onClick = { newClassOpen = true },
                 // Alttaki telif yazısının (≈28 dp) üstünde kalsın
-                modifier = Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 44.dp)
-            ) { Text("＋ Sınıf ekle") }
+                modifier = Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 44.dp),
+                containerColor = softColors().container,
+                contentColor = softColors().onContainer,
+                elevation = androidx.compose.material3.FloatingActionButtonDefaults.elevation(2.dp, 2.dp, 2.dp, 2.dp)
+            ) { Text("＋ Sınıf ekle", fontWeight = FontWeight.SemiBold) }
         }
     }
 
@@ -274,20 +278,20 @@ private fun SummaryCard(studio: StudioViewModel) {
     else "Yedek " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
     val stale = done > 0 && (last == 0L || System.currentTimeMillis() - last > 7L * 24 * 3600 * 1000)
     val frac = if (total == 0) 0f else done.toFloat() / total
-    val fg = MaterialTheme.colorScheme.onPrimary
-    val dark = androidx.compose.foundation.isSystemInDarkTheme()
-    // Dolgulu mavi blok: sınıf kartlarından (beyaz) ayrı, genel bir özet olduğu hemen anlaşılır.
+    val soft = softColors()
+    val fg = soft.onContainer
+    // Pastel dolgulu blok: sınıf kartlarından (beyaz) ayrı, genel bir özet olduğu hemen anlaşılır.
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
             .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.primary)
+            .background(soft.container)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 androidx.compose.ui.text.buildAnnotatedString {
                     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp)) { append("$done") }
-                    withStyle(SpanStyle(color = fg.copy(alpha = 0.85f))) { append(" / $total çekildi") }
+                    withStyle(SpanStyle(color = soft.onContainerMuted)) { append(" / $total çekildi") }
                 },
                 color = fg,
                 modifier = Modifier.weight(1f)
@@ -297,8 +301,8 @@ private fun SummaryCard(studio: StudioViewModel) {
         Spacer(Modifier.size(8.dp))
         LinearProgressIndicator(
             progress = { frac },
-            color = fg,
-            trackColor = fg.copy(alpha = 0.28f),
+            color = soft.bar,
+            trackColor = soft.barTrack,
             modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
         )
         Spacer(Modifier.size(8.dp))
@@ -306,13 +310,13 @@ private fun SummaryCard(studio: StudioViewModel) {
             "${classes.size} sınıf · $missing eksik" + (if (retake > 0) " · $retake tekrar" else "") +
                 " · $backupText" + (if (stale) " (yedek önerilir)" else ""),
             style = MaterialTheme.typography.bodySmall,
-            color = if (stale) (if (dark) Color(0xFF5A3A00) else Color(0xFFFFE08A)) else fg.copy(alpha = 0.85f)
+            color = if (stale) soft.warnText else soft.onContainerMuted
         )
     }
 }
 
-private val DoneGreen = Color(0xFF3C9A5F)
-private val WarnOrange = Color(0xFFE08A00)
+private val DoneGreen = StatusColors.Done
+private val WarnOrange = StatusColors.Warn
 
 @Composable
 private fun ClassCard(

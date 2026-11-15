@@ -50,12 +50,12 @@ import kotlinx.coroutines.withContext
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private val EditorBg = Color(0xFF101014)
-private val Accent = Color(0xFF7AA2F7)
-private val FaceColor = Color(0xFF9ECE6A)
-private val CenterLine = Color(0xFFFFD54F)
-private val WarnTxt = Color(0xFFE0AF68)
-private val DimTxt = Color(0xFFB0B6C8)
+private val EditorBg = DarkUi.Bg
+private val Accent = DarkUi.Accent
+private val FaceColor = DarkUi.Ok
+private val CenterLine = DarkUi.Highlight
+private val WarnTxt = DarkUi.Warn
+private val DimTxt = DarkUi.Dim
 
 /** Görüntünün tuval üzerindeki ölçeği ve ofseti. */
 private class ViewTf(val scale: Float, val ox: Float, val oy: Float)

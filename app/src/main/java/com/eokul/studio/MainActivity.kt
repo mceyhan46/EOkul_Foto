@@ -83,74 +83,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/**
- * Tasarım belirteçleri (açık/koyu). Vurgu rengi tek: mavi; yeşil/amber/kırmızı yalnızca durum bildirir.
- * Metin/zemin çiftleri 4,5:1 ve üzeri hedeflenir. Koyu temada saf siyah yerine lacivert zemin kullanılır.
- */
-private val LightScheme = lightColorScheme(
-    primary = Color(0xFF2F5FC4),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDCE7FB),
-    onPrimaryContainer = Color(0xFF0F2A66),
-    secondary = Color(0xFF566277),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFE4EAF5),
-    onSecondaryContainer = Color(0xFF0F1B2D),
-    tertiary = Color(0xFF92400E),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFFCEBCB),
-    onTertiaryContainer = Color(0xFF5A2A06),
-    background = Color(0xFFF4F7FB),
-    onBackground = Color(0xFF0F1B2D),
-    surface = Color(0xFFF4F7FB),
-    onSurface = Color(0xFF0F1B2D),
-    surfaceVariant = Color(0xFFE7EDF7),
-    onSurfaceVariant = Color(0xFF566277),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFFFFFF),
-    surfaceContainer = Color(0xFFFFFFFF),
-    surfaceContainerHigh = Color(0xFFEEF2F9),
-    surfaceContainerHighest = Color(0xFFFFFFFF),
-    outline = Color(0xFF7C889C),
-    outlineVariant = Color(0xFFD5DDEA),
-    error = Color(0xFFB91C1C),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFBE0E0),
-    onErrorContainer = Color(0xFF5F1111)
-)
-
-private val DarkScheme = darkColorScheme(
-    primary = Color(0xFF8CAEFF),
-    onPrimary = Color(0xFF0B1E4A),
-    primaryContainer = Color(0xFF22345C),
-    onPrimaryContainer = Color(0xFFD9E6FF),
-    secondary = Color(0xFFA5B0C5),
-    onSecondary = Color(0xFF14203A),
-    secondaryContainer = Color(0xFF1F2A41),
-    onSecondaryContainer = Color(0xFFE8EDF7),
-    tertiary = Color(0xFFFBBF24),
-    onTertiary = Color(0xFF3A2A00),
-    tertiaryContainer = Color(0xFF3A2E12),
-    onTertiaryContainer = Color(0xFFFFE2A8),
-    background = Color(0xFF0E1524),
-    onBackground = Color(0xFFE8EDF7),
-    surface = Color(0xFF0E1524),
-    onSurface = Color(0xFFE8EDF7),
-    surfaceVariant = Color(0xFF1F2A41),
-    onSurfaceVariant = Color(0xFFA5B0C5),
-    surfaceContainerLowest = Color(0xFF0B101C),
-    surfaceContainerLow = Color(0xFF131C2E),
-    surfaceContainer = Color(0xFF172033),
-    surfaceContainerHigh = Color(0xFF1C2740),
-    surfaceContainerHighest = Color(0xFF172033),
-    outline = Color(0xFF7D8AA3),
-    outlineVariant = Color(0xFF2B3852),
-    error = Color(0xFFFCA5A5),
-    onError = Color(0xFF3B0A0A),
-    errorContainer = Color(0xFF3E1D22),
-    onErrorContainer = Color(0xFFFFD9D9)
-)
-
 /** Yumuşak köşeler: etiket 8, alan 12, kart 16, büyük yüzey 20 dp. Gölge yok; kartlar ince çerçeveyle ayrılır. */
 private val AppShapes = androidx.compose.material3.Shapes(
     extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
@@ -214,7 +146,7 @@ fun AppRoot(vm: AppViewModel, studio: StudioViewModel) {
         )
     val rootColor = when {
         sc0 is Screen.Camera -> Color.Black
-        darkScreen -> Color(0xFF101014)
+        darkScreen -> DarkUi.Bg
         else -> MaterialTheme.colorScheme.background
     }
     val sysDark = isSystemInDarkTheme()

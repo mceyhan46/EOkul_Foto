@@ -49,9 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val WarnColor = Color(0xFFE0A030)
-private val EditedColor = Color(0xFF4F86E8)
-private val DimColor = Color(0xFF8A8F9C)
+private val WarnColor = DarkUi.WarnAlt
+private val EditedColor = StatusColors.Edited
+private val DimColor = StatusColors.Dim
 
 @Composable
 fun GalleryScreen(vm: AppViewModel, onBack: () -> Unit) {

@@ -189,3 +189,8 @@ Geri yukleme/onizleme sinirlari ve yol denetimi -> core/RestoreGuard.java (Budge
 
 ## Capraz sinif ayni numara uyarisi (14 Kas)
 core/CrossClass.java (+CrossClassTest, 130 test). Engellemez: ogrenci ekle/numara degistir sonrasi "numara baska sinifta da var: ..." mesaji; liste ve sube iceri aktarimda "N numara baska siniflarda da var" notu. Ayrintisi Veri denetimi'nde.
+
+## Renkler, yedek saklama (1.1.20)
+- Tüm renkler `AppColors.kt` içinde: Material şemaları, `SoftColors` (ana ekran pastelleri), `StatusColors`, `DarkUi` (koyu ekranlar), `ButtonColors`. Başka dosyada `Color(0x…)` yazılmaz.
+- "Geri yükleme öncesi" güvenlik yedeklerinden en yeni 2'si tutulur, eskileri geri yükleme sonrası otomatik silinir (`BackupRetention`). Kullanıcının "Yedekle" ile aldığı zip'lere dokunulmaz.
+- Geri yükleme onayında yedeğin sürümü, tarihi ve "tekrar işaretli" sayısı gösterilir.

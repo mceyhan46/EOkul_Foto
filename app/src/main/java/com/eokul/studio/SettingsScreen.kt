@@ -491,7 +491,8 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
                 Text(
                     (if (ri != null)
                         "Yedekte: ${ri.classes} sınıf · ${ri.students} öğrenci (${ri.captured} fotoğraflı · ${ri.retake} tekrar işaretli)" +
-                            (ri.createdMs?.let { " · " + dateFmt.format(java.util.Date(it)) } ?: "") + "\n"
+                            (ri.createdMs?.let { " · " + dateFmt.format(java.util.Date(it)) } ?: "") +
+                            (if (ri.appVersion.isNotBlank()) " · sürüm ${ri.appVersion}" else "") + "\n"
                     else "") +
                         "Şu an uygulamada: ${studio.classes.size} sınıf · ${studio.classes.sumOf { it.students.size }} öğrenci\n\n" +
                         "Uygulamadaki tüm sınıf listeleri ve küçük fotoğraflar yedekteki ile DEĞİŞTİRİLİR. " +

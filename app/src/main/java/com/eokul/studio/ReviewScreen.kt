@@ -49,9 +49,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.BackHandler
 
-private val Bg = Color(0xFF101014)
-private val Warn = Color(0xFFE0AF68)
-private val Dim = Color(0xFFB0B6C8)
+private val Bg = DarkUi.Bg
+private val Warn = DarkUi.Warn
+private val Dim = DarkUi.Dim
 
 @Composable
 fun ReviewScreen(studio: StudioViewModel) {
@@ -233,12 +233,12 @@ fun ReviewScreen(studio: StudioViewModel) {
             Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (score >= 0) {
                     val col = when {
-                        score >= 80 -> Color(0xFF4CC38A)
+                        score >= 80 -> DarkUi.ScoreGood
                         score >= 60 -> Warn
-                        else -> Color(0xFFE5645F)
+                        else -> DarkUi.Danger
                     }
                     Row(
-                        Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF1B2232))
+                        Modifier.clip(RoundedCornerShape(50)).background(DarkUi.Pill)
                             .padding(start = 10.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -261,7 +261,7 @@ fun ReviewScreen(studio: StudioViewModel) {
             if (warnings.isNotEmpty()) {
                 Column(
                     Modifier.fillMaxWidth().padding(top = 6.dp).heightIn(max = 112.dp)
-                        .clip(RoundedCornerShape(10.dp)).background(Color(0xFF2A2415))
+                        .clip(RoundedCornerShape(10.dp)).background(DarkUi.WarnPanel)
                         .verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     for (w in warnings) Text(w, color = Warn, fontSize = 13.sp, modifier = Modifier.padding(vertical = 1.dp))
@@ -279,7 +279,7 @@ fun ReviewScreen(studio: StudioViewModel) {
             if (autoPending) {
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "✓ İyi çekim — otomatik kaydediliyor…", color = Color(0xFF9ECE6A),
+                        "✓ İyi çekim — otomatik kaydediliyor…", color = DarkUi.Ok,
                         fontSize = 13.sp, modifier = Modifier.weight(1f)
                     )
                     AppButton("Durdur", onClick = { autoStopped = true }, style = BtnStyle.Danger, dark = true, compact = true)

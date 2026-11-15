@@ -576,7 +576,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                 Text(
                     "${student.no}  ·  ${cls.name}  ·  ${index + 1}/${cls.students.size}" +
                         if (student.captured) "  ·  ✅" else "",
-                    color = Color(0xFFB0B6C8), fontSize = 12.sp
+                    color = DarkUi.Dim, fontSize = 12.sp
                 )
             }
             PrevBtn(onClick = { studio.cameraMove(classId, no, -1) }, enabled = index > 0)
@@ -609,7 +609,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                     ) {
                         Text(
                             hint,
-                            color = if (ev?.ready == true) Color(0xFF9ECE6A) else Color(0xFFE0AF68),
+                            color = if (ev?.ready == true) DarkUi.Ok else DarkUi.Warn,
                             fontSize = 14.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
@@ -617,7 +617,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                     val lf = live
                     if (lf != null && studio.settings.smartShot) {
                         val lh = lightHint(lf.light)
-                        val lcol = if (lh == null) Color(0xFF9ECE6A) else Color(0xFFE0AF68)
+                        val lcol = if (lh == null) DarkUi.Ok else DarkUi.Warn
                         Surface(
                             color = Color.Black.copy(alpha = 0.55f),
                             shape = RoundedCornerShape(12.dp),
@@ -654,7 +654,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                     Text("Kamera izni gerekli", color = Color.White, style = MaterialTheme.typography.titleMedium)
                     Text(
                         "Fotoğraf çekmek için kamera izni verin veya galeriden bir fotoğraf seçin.",
-                        color = Color(0xFFB0B6C8), modifier = Modifier.padding(vertical = 8.dp)
+                        color = DarkUi.Dim, modifier = Modifier.padding(vertical = 8.dp)
                     )
                     Button(onClick = {
                         if (askedOnce) {
@@ -672,12 +672,12 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
         }
 
         camError?.let {
-            Text(it, color = Color(0xFFE0AF68), fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp))
+            Text(it, color = DarkUi.Warn, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp))
         }
 
         // ---- Kontrol paneli
         Surface(
-            color = Color(0xFF131A27),
+            color = DarkUi.Panel,
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -704,7 +704,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                             modifier = Modifier.weight(1f).padding(start = 12.dp)
                         )
                         Text(
-                            "${"%.1f".format(1f + zoom * 3f)}×", color = Color(0xFFB0B6C8), fontSize = 12.sp,
+                            "${"%.1f".format(1f + zoom * 3f)}×", color = DarkUi.Dim, fontSize = 12.sp,
                             modifier = Modifier.padding(start = 6.dp, end = 4.dp)
                         )
                     }
@@ -719,7 +719,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                         if (torchOn) CamIcons.FlashOn else CamIcons.FlashOff,
                         if (torchOn) "Işığı kapat" else "Işığı aç",
                         { torchOn = !torchOn },
-                        tint = if (torchOn) Color(0xFFFFD54F) else Color.White,
+                        tint = if (torchOn) DarkUi.Highlight else Color.White,
                         enabled = hasPerm && lensBack
                     )
                     val shutterOk = hasPerm && camera != null && !capturing
@@ -755,13 +755,13 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
 @Composable
 private fun ModeChip(label: String, on: Boolean, onClick: () -> Unit) {
     Surface(
-        color = if (on) Color(0xFF2F5FC4) else Color(0xFF232C3D),
+        color = if (on) DarkUi.Brand else DarkUi.Chip,
         shape = RoundedCornerShape(50),
         modifier = Modifier.clip(RoundedCornerShape(50)).clickable { onClick() }
     ) {
         Text(
             label,
-            color = if (on) Color.White else Color(0xFFB0B6C8),
+            color = if (on) Color.White else DarkUi.Dim,
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
         )
@@ -772,10 +772,10 @@ private fun ModeChip(label: String, on: Boolean, onClick: () -> Unit) {
 @Composable
 private fun QualityBadge(score: Int, modifier: Modifier = Modifier) {
     val col = when {
-        score < 0 -> Color(0xFF8A93A8)
-        score >= 80 -> Color(0xFF4CC38A)
-        score >= 60 -> Color(0xFFE0AF68)
-        else -> Color(0xFFE5645F)
+        score < 0 -> DarkUi.Muted
+        score >= 80 -> DarkUi.ScoreGood
+        score >= 60 -> DarkUi.Warn
+        else -> DarkUi.Danger
     }
     Surface(color = Color.Black.copy(alpha = 0.62f), shape = RoundedCornerShape(50), modifier = modifier) {
         Row(
@@ -824,13 +824,13 @@ private fun GuideOverlay(s: Settings) {
         val cx = w / 2f
         val dash = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))
         drawRoundRect(
-            color = Color(0xFF9ECE6A),
+            color = DarkUi.Ok,
             topLeft = Offset(cx - headW / 2f, hairY),
             size = Size(headW, headH),
             cornerRadius = CornerRadius(headW / 2f, headH / 2f),
             style = Stroke(width = 3f, pathEffect = dash)
         )
-        drawLine(Color(0xFF9ECE6A).copy(alpha = 0.7f), Offset(left, chinY), Offset(left + cwAdj, chinY), strokeWidth = 1.5f)
+        drawLine(DarkUi.Ok.copy(alpha = 0.7f), Offset(left, chinY), Offset(left + cwAdj, chinY), strokeWidth = 1.5f)
         // Omuz çizgisi için yumuşak ipucu
         drawLine(
             Color.White.copy(alpha = 0.35f),
@@ -847,7 +847,7 @@ private fun LiveOverlay(live: LiveFace?, ok: Boolean, progress: Float, focusMark
         val w = size.width
         val h = size.height
         if (live != null) {
-            val col = if (ok) Color(0xFF9ECE6A) else Color(0xFFE0AF68)
+            val col = if (ok) DarkUi.Ok else DarkUi.Warn
             drawRoundRect(
                 color = col,
                 topLeft = Offset(live.x1 * w, live.y1 * h),
@@ -858,7 +858,7 @@ private fun LiveOverlay(live: LiveFace?, ok: Boolean, progress: Float, focusMark
             if (progress > 0f) {
                 val r = (live.x2 - live.x1) * w * 0.55f
                 drawArc(
-                    color = Color(0xFF9ECE6A),
+                    color = DarkUi.Ok,
                     startAngle = -90f,
                     sweepAngle = 360f * progress,
                     useCenter = false,

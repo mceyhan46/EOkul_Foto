@@ -912,10 +912,27 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     private fun artifactName(kind: String, ext: String): String =
         "EOkulStudio_${kind}_" + java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.US).format(java.util.Date()) + "." + ext
 
+    /**
+     * Uygulamanın kendi aldığı "geri yükleme öncesi" güvenlik yedeklerinden en yeni [KEEP_SAFETY_BACKUPS] tanesi dışındakileri siler.
+     * Kullanıcının "Yedekle" ile aldığı yedeklere dokunulmaz. Silinemeyen dosya kritik değildir.
+     */
+    private suspend fun pruneSafetyBackups(root: Uri) = withContext(Dispatchers.IO) {
+        try {
+            val names = Output.listNames(ctx, root, emptyList()) ?: return@withContext
+            val old = com.eokul.studio.core.BackupRetention.safetyBackupsToDelete(names, KEEP_SAFETY_BACKUPS)
+            for (n in old) Output.deletePath(ctx, root, emptyList(), n)
+            if (old.isNotEmpty()) Ops.log("op", "name", "prune_safety", "ok", true, "deleted", old.size)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Ops.error("prune_safety", e)
+        }
+    }
+
     /** Yedek ZIP'inin özeti (geri yüklemeden önce kullanıcıya gösterilir). */
     data class BackupInfo(
         val classes: Int, val students: Int, val captured: Int, val photos: Int, val createdMs: Long?,
-        val retake: Int = 0, val boxes: Int = 0
+        val retake: Int = 0, val boxes: Int = 0, val appVersion: String = ""
     )
 
     /** Yedeği geri yüklemeden önce içeriğini okur; geçerli bir yedek değilse null (mevcut veriye dokunulmaz). */
@@ -965,7 +982,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             val created = manifestObject.optLong("created", 0L).takeIf { it > 0 }
             BackupInfo(
                 parsed.size, parsed.sumOf { it.students.size }, parsed.sumOf { c -> c.students.count { it.captured } }, photos, created,
-                retake = parsed.sumOf { c -> c.students.count { it.retake } }, boxes = parsed.sumOf { c -> c.students.count { it.box != null } }
+                retake = parsed.sumOf { c -> c.students.count { it.retake } }, boxes = parsed.sumOf { c -> c.students.count { it.box != null } },
+                appVersion = manifestObject.optString("appVersion", "")
             )
         } catch (e: CancellationException) {
             throw e
@@ -1201,6 +1219,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     "retake", restored.first.sumOf { c -> c.students.count { it.retake } },
                     "boxes", restored.first.sumOf { c -> c.students.count { it.box != null } }
                 )
+                if (safety != null) settings.rootUri?.let { pruneSafetyBackups(Uri.parse(it)) }
                 say(
                     "✓ ${restored.first.size} sınıf geri yüklendi · ${restored.first.sumOf { c -> c.students.count { it.captured } }} çekilmiş öğrenci · " +
                         "${restored.first.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · " +
@@ -1655,6 +1674,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
+/** Kayıt klasöründe tutulan en yeni "geri yükleme öncesi" güvenlik yedeği sayısı; eskileri otomatik silinir. */
+private const val KEEP_SAFETY_BACKUPS = 2
 private const val ORIG_MAX_SIDE = 1600
 private const val ORIG_MAX_BYTES = 900_000
 

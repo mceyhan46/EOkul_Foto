@@ -366,8 +366,8 @@ private fun StudentRow(
             }
         }
     }
-    val okColor = Color(0xFF3C9A5F)
-    val warnColor = Color(0xFFE08A00)
+    val okColor = StatusColors.Done
+    val warnColor = StatusColors.Warn
     val stateColor = when {
         s.retake || s.isLow() -> warnColor
         s.captured -> okColor
