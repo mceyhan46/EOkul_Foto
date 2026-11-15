@@ -913,7 +913,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         "EOkulStudio_${kind}_" + java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.US).format(java.util.Date()) + "." + ext
 
     /** Yedek ZIP'inin özeti (geri yüklemeden önce kullanıcıya gösterilir). */
-    data class BackupInfo(val classes: Int, val students: Int, val captured: Int, val photos: Int, val createdMs: Long?)
+    data class BackupInfo(
+        val classes: Int, val students: Int, val captured: Int, val photos: Int, val createdMs: Long?,
+        val retake: Int = 0, val boxes: Int = 0
+    )
 
     /** Yedeği geri yüklemeden önce içeriğini okur; geçerli bir yedek değilse null (mevcut veriye dokunulmaz). */
     suspend fun inspectBackup(uri: Uri): BackupInfo? = withContext(Dispatchers.IO) {
@@ -960,7 +963,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 manifestObject.optInt("photos", -1) != photos
             ) return@withContext null
             val created = manifestObject.optLong("created", 0L).takeIf { it > 0 }
-            BackupInfo(parsed.size, parsed.sumOf { it.students.size }, parsed.sumOf { c -> c.students.count { it.captured } }, photos, created)
+            BackupInfo(
+                parsed.size, parsed.sumOf { it.students.size }, parsed.sumOf { c -> c.students.count { it.captured } }, photos, created,
+                retake = parsed.sumOf { c -> c.students.count { it.retake } }, boxes = parsed.sumOf { c -> c.students.count { it.box != null } }
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -1059,9 +1065,13 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 val tb = android.os.SystemClock.elapsedRealtime()
                 val snap = stableRosterSnapshot()
                 val name = writeBackup(root, snap, "Yedek")
-                Ops.log("op", "name", "backup", "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tb, "n", name.second)
+                Ops.log(
+                    "op", "name", "backup", "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tb, "n", name.second,
+                    "captured", name.third, "retake", snap.sumOf { c -> c.students.count { it.retake } },
+                    "boxes", snap.sumOf { c -> c.students.count { it.box != null } }
+                )
                 SettingsState.update(settings.copy(lastBackupMs = System.currentTimeMillis()))
-                say("✓ Yedek alındı ve doğrulandı: ${name.first}\n${name.second} fotoğraf · ${name.third} çekilmiş öğrenci · ${snap.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı.\n" +
+                say("✓ Yedek alındı ve doğrulandı: ${name.first}\n${name.second} fotoğraf · ${name.third} çekilmiş öğrenci · ${snap.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · ${snap.sumOf { c -> c.students.count { it.retake } }} tekrar işaretli.\n" +
                     "Dosya kayıt klasöründe durur; uygulamayı silseniz de kalır. Tam çözünürlüklü orijinaller yedeğe girmez, kayıt klasöründe kalır.")
                 }
             } catch (e: CancellationException) {
@@ -1185,9 +1195,16 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 classes.clear()
                 classes.addAll(restored.first)
                 rosterVersion.incrementAndGet()
+                Ops.log(
+                    "op", "name", "restore", "ok", true,
+                    "captured", restored.first.sumOf { c -> c.students.count { it.captured } },
+                    "retake", restored.first.sumOf { c -> c.students.count { it.retake } },
+                    "boxes", restored.first.sumOf { c -> c.students.count { it.box != null } }
+                )
                 say(
                     "✓ ${restored.first.size} sınıf geri yüklendi · ${restored.first.sumOf { c -> c.students.count { it.captured } }} çekilmiş öğrenci · " +
-                        "${restored.first.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı" +
+                        "${restored.first.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · " +
+                        "${restored.first.sumOf { c -> c.students.count { it.retake } }} tekrar işaretli" +
                         (if (restored.second > 0) " (${restored.second} bozuk fotoğraf atlandı)" else "") +
                         (if (safety != null) "\nÖnceki verinizin güvenlik kopyası: $safety" else "")
                 )

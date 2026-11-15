@@ -1,6 +1,6 @@
 package com.eokul.studio.core;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.util.Random;
 import org.junit.Test;
@@ -153,5 +153,58 @@ public class CropTest {
         double w = b[2] - b[0];
         double center = ((face[0] + face[2]) / 2 - b[0]) / w;
         assertTrue("yüz merkezi " + center, Math.abs(center - (1 + 0.25 - 0.10) / 2) < 0.01);
+    }
+
+    // ---- Yakın/Uzak: üst kenar sabit, yüz merkezi etrafında ölçek
+    private static final double R = 133.0 / 171.0;
+
+    @Test public void zoomInKeepsTopEdgeAndFaceCenterX() {
+        double[] box = {300, 200, 300 + 600 * R, 200 + 600};          // 600 yüksekliğinde kutu
+        double fcx = 420;                                                // yüz merkezi, kutu merkezinden solda
+        double[] r = Crop.zoomAnchored(box, fcx, 560, 200, 0.94, 2000, 2000, R);
+        assertNotNull(r);
+        assertEquals(200.0, r[1], 1e-6);                                 // üst kenar sabit
+        assertEquals((box[2] - box[0]) * 0.94, r[2] - r[0], 1e-6);       // genişlik %94
+        // yüz merkezinin kutu içindeki oransal konumu değişmez → x konumu sabit kalır
+        double before = (fcx - box[0]) / (box[2] - box[0]);
+        double after = (fcx - r[0]) / (r[2] - r[0]);
+        assertEquals(before, after, 1e-9);
+        assertEquals(R, (r[2] - r[0]) / (r[3] - r[1]), 1e-9);            // oran korunur
+    }
+
+    @Test public void zoomOutKeepsTopEdge() {
+        double[] box = {300, 200, 300 + 500 * R, 200 + 500};
+        double[] r = Crop.zoomAnchored(box, 420, 480, 200, 1.06, 2000, 2000, R);
+        assertNotNull(r);
+        assertEquals(200.0, r[1], 1e-6);
+        assertTrue(r[2] - r[0] > box[2] - box[0]);
+    }
+
+    @Test public void zoomInStopsBeforeCuttingChin() {
+        double[] box = {300, 200, 300 + 400 * R, 600};                   // alt 600
+        // çene 590'da: 0.94 ile alt 576 olur ve çeneyi keserdi → null
+        assertNull(Crop.zoomAnchored(box, 420, 590, 150, 0.94, 2000, 2000, R));
+        // çene 450'de: serbest
+        assertNotNull(Crop.zoomAnchored(box, 420, 450, 150, 0.94, 2000, 2000, R));
+    }
+
+    @Test public void zoomInStopsBeforeCuttingFaceWidth() {
+        double[] box = {300, 200, 300 + 400 * R, 600};
+        double faceW = (box[2] - box[0]) * 0.99;                         // yüz neredeyse kutu genişliğinde
+        assertNull(Crop.zoomAnchored(box, 420, 300, faceW, 0.94, 2000, 2000, R));
+    }
+
+    @Test public void zoomOutShiftsUpOnlyWhenImageBottomIsHit() {
+        double ih = 1000;
+        double[] box = {300, 500, 300 + 450 * R, 950};                   // alt 950, görüntü 1000
+        double[] r = Crop.zoomAnchored(box, 420, 800, 150, 1.20, 2000, (int) ih, R);
+        assertNotNull(r);
+        assertTrue(r[3] <= ih + 1e-9);
+        assertTrue(r[1] < 500.0);                                        // yalnızca gerektiği kadar yukarı kaydı
+    }
+
+    @Test public void zoomOutAtImageLimitDoesNothing() {
+        double[] box = {0, 0, 1000 * R, 1000};                           // görüntü yüksekliği = kutu
+        assertNull(Crop.zoomAnchored(box, 300, 800, 150, 1.06, 2000, 1000, R));
     }
 }

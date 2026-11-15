@@ -51,6 +51,31 @@ public final class Crop {
         return new double[]{b[0] * sx, b[1] * sy, b[2] * sx, b[3] * sy};
     }
 
+    /**
+     * Yakın/Uzak düğmeleri için yeni kutu. Kutunun ÜST KENARI sabit kalır (baş üstü boşluğu değişmez), yatayda kutu
+     * [anchorX] (yüz merkezi) etrafında ölçeklenir: yüz merkezinin görüntüdeki x konumu değişmez.
+     * Yakınlaşırken çene ([faceBottom]) ve yüz genişliği ([faceW]) kadraj dışına taşırılmaz; sınırda null (değişiklik yok).
+     * Görüntü sınırı aşılırsa [fitInside] kutuyu yalnızca gerektiği kadar kaydırır. null = değişiklik yok.
+     */
+    public static double[] zoomAnchored(double[] box, double anchorX, double faceBottom, double faceW,
+                                        double factor, int iw, int ih, double ratio) {
+        double maxW = Math.min((double) iw, ih * ratio);
+        double minW = Math.min(40.0, maxW);
+        double w = box[2] - box[0];
+        double newW = w * factor;
+        if (factor < 1.0) {
+            double floorH = (faceBottom - box[1]) * 1.03;
+            double floorW = Math.max(Math.max(floorH * ratio, faceW * 1.15), minW);
+            if (floorW >= w) return null;
+            newW = Math.max(newW, floorW);
+        }
+        newW = Math.min(Math.max(newW, minW), maxW);
+        if (Math.abs(newW - w) < 1e-6) return null;
+        double k = newW / w;
+        double x1 = anchorX + (box[0] - anchorX) * k;
+        return fitInside(new double[]{x1, box[1], x1 + newW, box[1] + newW / ratio}, iw, ih, ratio);
+    }
+
     /** Kutuyu en-boy oranını koruyarak görüntü içine sığdırır (merkezi mümkün olduğunca korur). */
     public static double[] fitInside(double[] b, int iw, int ih, double ratio) {
         double w = Math.max(1.0, Math.min(Math.min(b[2] - b[0], iw), ih * ratio));
