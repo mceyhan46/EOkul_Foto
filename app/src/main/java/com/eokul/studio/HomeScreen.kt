@@ -443,6 +443,7 @@ private fun HomeDrawer(studio: StudioViewModel, closeThen: (() -> Unit) -> Unit,
             DrawerItem("Yedekle", Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring) { closeThen { studio.backup() } }
             DrawerItem("Yedekten geri yükle", Icons.Filled.Refresh, enabled = !studio.isRestoring) { closeThen { startRestore() } }
             DrawerItem("Tüm sınıflar ZIP (klasörlü + rapor)", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportAllFoldersZip() } }
+            DrawerItem("Sınıfları PDF olarak aktar", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportClassesPdf() } }
             DrawerItem("Eksik klasör dosyalarını onar", Icons.Filled.Build, enabled = hasClasses) { closeThen { studio.repairFolderFiles() } }
             DrawerItem("Veri denetimi", Icons.Filled.Search, enabled = hasClasses) { closeThen { studio.auditData() } }
             DrawerGroup("Uygulama")

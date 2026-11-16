@@ -43,6 +43,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var advanced by remember { mutableStateOf(false) }
     var diagOpen by remember { mutableStateOf(false) }
+    var backupPrefix by remember { mutableStateOf(vm.settings.backupPrefix) }
     var sideGaps by remember { mutableStateOf(false) }
     var pinOpen by remember { mutableStateOf(false) }
     val startRestore = rememberRestoreFlow(studio)
@@ -106,6 +107,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         error = problem
         if (problem != null || kb == null || mkb == null || pw == null || ph == null) return null
         return vm.settings.copy(
+            backupPrefix = com.eokul.studio.core.BackupNames.sanitizePrefix(backupPrefix),
             serialMode = serial,
             autoTol = (autoTol * 100.0).roundToInt() / 100.0,
             autoHoldMs = ((autoHold / 100f).roundToInt() * 100).coerceIn(400, 4000),
@@ -409,8 +411,17 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             modifier = Modifier.padding(top = 6.dp)
         )
         Text(
-            "Yedek: sınıf listeleri ve küçük fotoğraflar kayıt klasörüne EOkulStudio_Yedek_tarih.zip olarak yazılır ve yazıldıktan sonra doğrulanır. Tam çözünürlüklü orijinaller yedeğe girmez.",
+            "Yedek: sınıf listeleri ve küçük fotoğraflar kayıt klasörünün içindeki “Yedek” klasörüne Ydk_160726_0816.zip gibi (gün-ay-yıl_saat-dakika) yazılır ve yazıldıktan sonra doğrulanır. Tam çözünürlüklü orijinaller yedeğe girmez.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.size(10.dp))
+        OutlinedTextField(
+            value = backupPrefix, onValueChange = { backupPrefix = it.take(com.eokul.studio.core.BackupNames.MAX_PREFIX) },
+            label = { Text("Yedek dosya adı öneki") }, singleLine = true,
+            supportingText = {
+                Text("Örnek: ${com.eokul.studio.core.BackupNames.sanitizePrefix(backupPrefix)}_160726_0816.zip · yalnızca harf, rakam, - ve _ ; “Kaydet” ile geçerli olur")
+            },
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.size(10.dp))
         Text("Yeni sürüme veya yeni telefona geçiş", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
@@ -419,7 +430,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
                 "2. Yedek dosyası kayıt klasörünüzde durur; uygulamayı silmek onu silmez.\n" +
                 "3. Eski uygulamayı kaldırıp yeni APK’yı kurun (imza değiştiyse güncelleme üstüne kurulmaz).\n" +
                 "4. Açılışta aynı kayıt klasörünü yeniden seçin.\n" +
-                "5. “Geri yükle” ile EOkulStudio_Yedek_….zip dosyasını seçin; içeriği önce gösterilir, geri yüklemeden önce mevcut verinin ayrı bir kopyası otomatik alınır.",
+                "5. “Geri yükle” ile yedek zip dosyasını (Yedek klasöründe) seçin; içeriği önce gösterilir, geri yüklemeden önce mevcut verinin ayrı bir kopyası otomatik alınır.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         }

@@ -141,6 +141,10 @@ fun ClassScreen(studio: StudioViewModel, classId: String) {
                                     toolsOpen = false
                                     studio.exportEokulZip(cls.id)
                                 })
+                                DropdownMenuItem(text = { Text("Sınıf listesini PDF yap") }, onClick = {
+                                    toolsOpen = false
+                                    studio.exportClassesPdf(cls.id)
+                                })
                                 val stale = studio.staleNameCount(cls.id)
                                 if (stale > 0) {
                                     DropdownMenuItem(text = { Text("Dosya adlarını güncelle ($stale)") }, onClick = {

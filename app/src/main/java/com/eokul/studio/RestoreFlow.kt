@@ -45,7 +45,7 @@ fun rememberRestoreFlow(studio: StudioViewModel): () -> Unit {
                     else "") +
                         "Şu an uygulamada: ${studio.classes.size} sınıf · ${studio.classes.sumOf { it.students.size }} öğrenci\n\n" +
                         "Uygulamadaki tüm sınıf listeleri ve küçük fotoğraflar yedekteki ile DEĞİŞTİRİLİR. " +
-                        "Değiştirmeden önce mevcut verinin ayrı bir kopyası (EOkulStudio_GeriYuklemeOncesi_….zip) kayıt klasörüne otomatik alınır."
+                        "Değiştirmeden önce mevcut verinin ayrı bir kopyası (Yedek/Onc_….zip) kayıt klasörüne otomatik alınır."
                 )
             },
             confirmButton = {

@@ -197,3 +197,8 @@ core/CrossClass.java (+CrossClassTest, 130 test). Engellemez: ogrenci ekle/numar
 
 ## Tanılama (1.1.26)
 - Rapor araçları Ayarlar > "Gelişmiş: tanılama ve rapor" altında katlı. Günlük (OpLog/Ops) hiçbir hatada çağıranı etkilemez; başlatma hatası uygulamayı açılışta durdurmaz.
+
+## Yedek adları, kırpma, PDF (1.1.28)
+- Yedekler kayıt klasörü/Yedek altına, `Ydk_ggaayy_ssdd.zip` adıyla yazılır; önek Ayarlar'dan değiştirilir (`BackupNames`). Güvenlik yedeği `Onc_…`, rapor `Rpr_…`. Eski adlı güvenlik yedekleri de temizlikte tanınır.
+- "Kırpmayı düzenle": yüz bulunursa kutu güncel ayarlara göre göz ortasına hizalı yeniden hesaplanır; yüz yoksa kayıtlı kutu.
+- PDF: kayıt klasörü/PDF/Foto_ggaayy_ssdd.pdf; 7 sütun, sınıf başına yeni sayfa (`PdfGrid`, `ClassPdf`).

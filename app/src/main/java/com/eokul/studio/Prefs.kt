@@ -53,7 +53,9 @@ data class Settings(
     val pinHash: String? = null,
     val pinSalt: String? = null,
     /** Son başarılı yedeğin zamanı (ms); 0 = hiç alınmadı. */
-    val lastBackupMs: Long = 0L
+    val lastBackupMs: Long = 0L,
+    /** Yedek dosya adı öneki (kullanıcı değiştirebilir); varsayılan "Ydk". */
+    val backupPrefix: String = com.eokul.studio.core.BackupNames.DEFAULT_PREFIX
 ) {
     fun cropParams(): Crop.Params {
         val p = Crop.Params()
@@ -113,7 +115,8 @@ class Prefs(context: Context) {
             autoAcceptDelayMs = sp.getInt("autoAcceptDelayMs", d.autoAcceptDelayMs).coerceIn(700, 4000),
             pinHash = sp.getString("pinHash", null)?.takeIf { it.isNotBlank() },
             pinSalt = sp.getString("pinSalt", null)?.takeIf { it.isNotBlank() },
-            lastBackupMs = sp.getLong("lastBackupMs", 0L)
+            lastBackupMs = sp.getLong("lastBackupMs", 0L),
+            backupPrefix = com.eokul.studio.core.BackupNames.sanitizePrefix(sp.getString("backupPrefix", null))
         )
     }
 
@@ -147,6 +150,7 @@ class Prefs(context: Context) {
             .putString("pinHash", s.pinHash)
             .putString("pinSalt", s.pinSalt)
             .putLong("lastBackupMs", s.lastBackupMs)
+            .putString("backupPrefix", s.backupPrefix)
             .putInt("ver", 4)
             .apply()
     }

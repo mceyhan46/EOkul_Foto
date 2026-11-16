@@ -727,7 +727,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 s.pixels = px
                 s.iw = dims.first
                 s.ih = dims.second
-                val box = if (savedBox != null) {
+                // "Kırpmayı düzenle": yüz bulunursa kutu, güncel varsayılan kırpma ayarlarına göre yüzün merkezine (göz ortası)
+                // hizalı yeniden hesaplanır; böylece her fotoğraf aynı ölçüt ve konumla açılır. Yüz yoksa kayıtlı kutu kullanılır.
+                val autoBox = directEdit && faces.isNotEmpty()
+                val box = if (savedBox != null && !autoBox) {
                     // Kayıtlı kutu çekim anındaki görüntü boyutundadır; açılan orijinal küçültülmüş olabilir → ölçekle
                     Box.of(Crop.scaleBox(savedBox.toArray(), savedBoxW, savedBoxH, dims.first, dims.second))
                         .fitInside(dims.first, dims.second)
@@ -744,7 +747,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 cap.shownAt = android.os.SystemClock.elapsedRealtime()
                 Ops.log(
                     "review_ready", "id", Ops.id(no), "ms", cap.shownAt - tReady, "prefetch", pfState,
-                    "w", dims.first, "h", dims.second, "faces", faces.size, "saved", fromSaved
+                    "w", dims.first, "h", dims.second, "faces", faces.size, "saved", fromSaved, "autoBox", autoBox
                 )
                 if (directEdit && screen == Screen.Review) openCaptureEditor()
             } catch (e: CancellationException) {
@@ -812,6 +815,44 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     // ------------------------------------------------------------------ araçlar (dışa aktarma, yedek, adlar)
     private fun stamp(): String =
         java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date())
+
+    /**
+     * Tüm sınıfları (veya [classId] verilirse yalnızca onu) fotoğraf listesi PDF'i olarak kayıt klasörü/PDF içine yazar.
+     * Düzen: sınıf başlığı, numara sırasıyla 7'li satırlar, fotoğraf altında numara ve ad; her sınıf yeni sayfada başlar.
+     */
+    fun exportClassesPdf(classId: String? = null) {
+        val rootStr = settings.rootUri
+        if (rootStr == null) {
+            say("Önce kayıt klasörünü seçin")
+            return
+        }
+        val root = Uri.parse(rootStr)
+        val snap = classes.toList().filter { classId == null || it.id == classId }
+        if (snap.isEmpty() || snap.all { it.students.isEmpty() }) {
+            say("PDF için öğrenci yok")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val name = com.eokul.studio.core.BackupNames.name("Foto", java.util.Date(), java.util.TimeZone.getDefault(), "pdf")
+                val ratio = TARGET_H.toDouble() / TARGET_W
+                val pages = withContext(Dispatchers.IO) {
+                    var n = 0
+                    Output.writeStream(ctx, root, listOf("PDF"), name, "application/pdf") { out ->
+                        n = ClassPdf.write(ctx, snap, out, ratio)
+                    }
+                    n
+                }
+                Ops.log("op", "name", "pdf", "ok", true, "classes", snap.size, "pages", pages)
+                say("✓ PDF hazır: PDF/$name\n${snap.size} sınıf · $pages sayfa")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Ops.log("op", "name", "pdf", "ok", false, "err", (e.message ?: e.javaClass.simpleName).take(200))
+                say("PDF oluşturulamadı: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
 
     /** Çekilmiş öğrencilerin fotoğraflarını `12345.jpg` adlarıyla tek bir ZIP'e yazar (e-Okul yüklemesi için). */
     fun exportEokulZip(classId: String) {
@@ -907,10 +948,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Uygulamanın kayıt klasörüne yazdığı dosyalar tek bir önekle ayırt edilir (başka programların yedekleriyle karışmasın):
-     * EOkulStudio_Yedek_2026-11-12_06-39-10.zip. Eski "Yedek-….zip" dosyaları geri yüklenebilir (içerik denetimi addan bağımsızdır).
+     * Ydk_160726_0816.zip. Eski "Yedek-….zip" dosyaları geri yüklenebilir (içerik denetimi addan bağımsızdır).
      */
-    private fun artifactName(kind: String, ext: String): String =
-        "EOkulStudio_${kind}_" + java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.US).format(java.util.Date()) + "." + ext
+    private fun artifactName(prefix: String, ext: String): String =
+        com.eokul.studio.core.BackupNames.name(prefix, java.util.Date(), java.util.TimeZone.getDefault(), ext)
 
     /**
      * Uygulamanın kendi aldığı "geri yükleme öncesi" güvenlik yedeklerinden en yeni [KEEP_SAFETY_BACKUPS] tanesi dışındakileri siler.
@@ -918,10 +959,17 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun pruneSafetyBackups(root: Uri) = withContext(Dispatchers.IO) {
         try {
-            val names = Output.listNames(ctx, root, emptyList()) ?: return@withContext
-            val old = com.eokul.studio.core.BackupRetention.safetyBackupsToDelete(names, KEEP_SAFETY_BACKUPS)
-            for (n in old) Output.deletePath(ctx, root, emptyList(), n)
-            if (old.isNotEmpty()) Ops.log("op", "name", "prune_safety", "ok", true, "deleted", old.size)
+            // Yeni yedekler "Yedek" klasöründe; eski sürümlerin güvenlik yedekleri kayıt klasörünün kökünde olabilir.
+            val inFolder = Output.listNames(ctx, root, BACKUP_DIR) ?: emptyList()
+            val inRoot = Output.listNames(ctx, root, emptyList()) ?: emptyList()
+            val toDelete = com.eokul.studio.core.BackupRetention.safetyBackupsToDelete(inFolder + inRoot, KEEP_SAFETY_BACKUPS).toSet()
+            var deleted = 0
+            for (n in toDelete) {
+                // adı hangi klasörde ise oradan silinir
+                if (n in inFolder) Output.deletePath(ctx, root, BACKUP_DIR, n) else Output.deletePath(ctx, root, emptyList(), n)
+                deleted++
+            }
+            if (deleted > 0) Ops.log("op", "name", "prune_safety", "ok", true, "deleted", deleted)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -1018,7 +1066,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 .put("photos", photos.size)
                 .toString()
             val n = artifactName(prefix, "zip")
-            val uri = Output.writeStream(ctx, root, emptyList(), n, "application/zip") { out ->
+            val uri = Output.writeStream(ctx, root, BACKUP_DIR, n, "application/zip") { out ->
                 BackupZip.write(out, manifest.toByteArray(Charsets.UTF_8), rosterBytes, ctx.filesDir, photos)
             }
             // Yazılan ZIP yeniden açılır; tüm girdiler, manifest ve roster snapshot'ı doğrulanır.
@@ -1033,14 +1081,14 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     m.optInt("photos", -1) != photos.size
                 ) throw IOException("Yedek manifest doğrulaması başarısız")
             } catch (e: Exception) {
-                Output.deletePath(ctx, root, emptyList(), n)
+                Output.deletePath(ctx, root, BACKUP_DIR, n)
                 throw e
             }
             Triple(n, photos.size, captured)
         }
 
     /** Tanılama raporu için önerilen dosya adı. */
-    fun reportFileName(): String = artifactName("Rapor", "txt")
+    fun reportFileName(): String = artifactName(com.eokul.studio.core.BackupNames.REPORT_PREFIX, "txt")
 
     /** Tanılama raporunu kullanıcının seçtiği konuma (Dosya seçici: İndirilenler vb.) yazar; öğrenci adı içermez. */
     fun saveReportTo(uri: Uri) {
@@ -1069,7 +1117,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         say("İşlem kaydı temizlendi")
     }
 
-    /** Sınıf listesi + küçük fotoğraflar: kayıt klasörüne EOkulStudio_Yedek_tarih.zip (akış tabanlı, doğrulamalı). */
+    /** Sınıf listesi + küçük fotoğraflar: kayıt klasörü/Yedek/Ydk_ggaayy_ssdd.zip (akış tabanlı, doğrulamalı). */
     fun backup() {
         val rootStr = settings.rootUri
         if (rootStr == null) {
@@ -1082,7 +1130,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 saveMutex.withLock {
                 val tb = android.os.SystemClock.elapsedRealtime()
                 val snap = stableRosterSnapshot()
-                val name = writeBackup(root, snap, "Yedek")
+                val name = writeBackup(root, snap, settings.backupPrefix)
                 Ops.log(
                     "op", "name", "backup", "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tb, "n", name.second,
                     "captured", name.third, "retake", snap.sumOf { c -> c.students.count { it.retake } },
@@ -1090,7 +1138,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 )
                 SettingsState.update(settings.copy(lastBackupMs = System.currentTimeMillis()))
                 say("✓ Yedek alındı ve doğrulandı: ${name.first}\n${name.second} fotoğraf · ${name.third} çekilmiş öğrenci · ${snap.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · ${snap.sumOf { c -> c.students.count { it.retake } }} tekrar işaretli.\n" +
-                    "Dosya kayıt klasöründe durur; uygulamayı silseniz de kalır. Tam çözünürlüklü orijinaller yedeğe girmez, kayıt klasöründe kalır.")
+                    "Dosya kayıt klasörünüzdeki \"Yedek\" klasöründe durur; uygulamayı silseniz de kalır. Tam çözünürlüklü orijinaller yedeğe girmez, kayıt klasöründe kalır.")
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -1127,7 +1175,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                         "Önce kayıt klasörünü seçin (geri yükleme öncesinde mevcut verinin güvenlik yedeği alınır)"
                     )
                     safety = withContext(Dispatchers.IO) {
-                        writeBackup(Uri.parse(rootStr), classes.toList(), "GeriYuklemeOncesi").first
+                        writeBackup(Uri.parse(rootStr), classes.toList(), com.eokul.studio.core.BackupNames.SAFETY_PREFIX).first
                     }
                 }
 
@@ -1676,6 +1724,9 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
 /** Kayıt klasöründe tutulan en yeni "geri yükleme öncesi" güvenlik yedeği sayısı; eskileri otomatik silinir. */
 private const val KEEP_SAFETY_BACKUPS = 2
+
+/** Yedek dosyalarının durduğu alt klasör (kayıt klasörünün içinde). */
+private val BACKUP_DIR = listOf(com.eokul.studio.core.BackupNames.FOLDER)
 private const val ORIG_MAX_SIDE = 1600
 private const val ORIG_MAX_BYTES = 900_000
 
