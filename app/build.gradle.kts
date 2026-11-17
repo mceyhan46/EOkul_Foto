@@ -89,4 +89,6 @@ dependencies {
     implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
     // Birim testleri (çekirdek mantık: liste ayrıştırma, Excel okuma, kırpma/JPEG hattı, kalite ölçümü)
     testImplementation("junit:junit:4.13.2")
+    // Kotlin tarafındaki liste kaydı testleri için gerçek org.json (Android birim test sınıf yolundaki taslak çalışmaz).
+    testImplementation("org.json:json:20240303")
 }
