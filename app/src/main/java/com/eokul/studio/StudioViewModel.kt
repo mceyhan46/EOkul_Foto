@@ -232,14 +232,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ------------------------------------------------------------------ kalıcılık
-    private fun captureKey(classId: String, no: String) = "$classId|$no"
+    private fun captureKey(classId: String, no: String) = CaptureRules.key(classId, no)
 
     /** Henüz fotoğraf dosyası doğrulanmamış öğrencileri diskte eski durumuyla temsil eder. */
-    private fun stableRosterSnapshot(): List<SchoolClass> = classes.map { cls ->
-        cls.copy(students = cls.students.map { student ->
-            pendingCaptureOriginals[captureKey(cls.id, student.no)] ?: student
-        })
-    }
+    private fun stableRosterSnapshot(): List<SchoolClass> = CaptureRules.stableSnapshot(classes.toList(), pendingCaptureOriginals)
 
     /** Her değişiklik sürümlenir; yalnızca en güncel snapshot diske yazılabilir. */
     private fun persist() {
@@ -1333,11 +1329,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val before = st
         pendingCaptureOriginals[captureKey(cap.classId, cap.no)] = before
         updateStudentTransient(cap.classId, cap.no) { student ->
-            student.copy(
-                captured = true, updatedAt = System.currentTimeMillis(), box = box, boxW = iw, boxH = ih, faceCount = faceCount,
-                retake = warned,
-                score = if (newScore >= 0) newScore else student.score
-            )
+            CaptureRules.optimistic(student, box, iw, ih, faceCount, warned, newScore, System.currentTimeMillis())
         }
         capture = null
         afterSave(cap.classId, cap.no, set)
@@ -1351,7 +1343,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     pendingCaptureOriginals.remove(captureKey(cap.classId, cap.no))
                     updateStudent(cap.classId, cap.no) {
                         // updatedAt yenilenir: küçük resim dosya yazıldıktan sonra yeniden okunur
-                        it.copy(updatedAt = System.currentTimeMillis(), origUri = saved.origUri, savedStem = saved.stem)
+                        CaptureRules.saved(it, saved.origUri, saved.stem, System.currentTimeMillis())
                     }
                     cap.temp?.delete()
                     if (saved.warnings.isNotEmpty()) say("⚠ ${st.name}: fotoğraf kaydedildi ancak " + saved.warnings.joinToString("; "))
@@ -1364,13 +1356,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     pendingCaptureOriginals.remove(captureKey(cap.classId, cap.no))
                     // Yalnızca çekimle değişen alanlar geri alınır; bu arada yapılan ad/numara düzenlemesi korunur.
-                    updateStudent(cap.classId, cap.no) {
-                        it.copy(
-                            captured = before.captured, updatedAt = before.updatedAt, box = before.box, boxW = before.boxW,
-                            boxH = before.boxH, faceCount = before.faceCount, retake = before.retake, score = before.score,
-                            origUri = before.origUri, savedStem = before.savedStem
-                        )
-                    }
+                    updateStudent(cap.classId, cap.no) { CaptureRules.rollback(it, before) }
                     say("⚠ ${st.name} (${st.no}) kaydedilemedi: ${e.message ?: e.javaClass.simpleName}. Bu öğrenciyi yeniden çekin.")
                 }
             }
