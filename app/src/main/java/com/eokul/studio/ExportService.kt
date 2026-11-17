@@ -1,5 +1,6 @@
 package com.eokul.studio
 
+import com.eokul.studio.core.RosterParser
 import java.io.File
 import java.io.OutputStream
 import java.util.zip.ZipEntry
