@@ -100,7 +100,10 @@ class SoftColors(
     val bar: Color,
     val barTrack: Color,
     /** Özet kutusunda "yedek önerilir" uyarı metni. */
-    val warnText: Color
+    val warnText: Color,
+    /** Menüdeki grup başlığı şeridinin dolgusu ve yazısı (başlık bloğundan bir ton açık). */
+    val group: Color,
+    val onGroup: Color
 )
 
 val LightSoft = SoftColors(
@@ -109,7 +112,9 @@ val LightSoft = SoftColors(
     onContainerMuted = Color(0xFF3A4F80),
     bar = Color(0xFF2F5FC4),
     barTrack = Color(0xFFF4F7FB),
-    warnText = Color(0xFF8A3B0B)
+    warnText = Color(0xFF8A3B0B),
+    group = Color(0xFFE3ECFB),
+    onGroup = Color(0xFF1B3A7A)
 )
 
 val DarkSoft = SoftColors(
@@ -118,7 +123,9 @@ val DarkSoft = SoftColors(
     onContainerMuted = Color(0xFFB4C4E6),
     bar = Color(0xFF8CAEFF),
     barTrack = Color(0xFF172033),
-    warnText = Color(0xFFFFD27A)
+    warnText = Color(0xFFFFD27A),
+    group = Color(0xFF222F4D),
+    onGroup = Color(0xFFC9D8FA)
 )
 
 @Composable

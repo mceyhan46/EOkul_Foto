@@ -853,7 +853,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     /** Çekilmiş öğrencilerin fotoğraflarını `12345.jpg` adlarıyla tek bir ZIP'e yazar (e-Okul yüklemesi için). */
     fun exportEokulZip(classId: String) {
         val cls = classById(classId) ?: return
-        exportZip(listOf(cls), sanitizedZipName(cls.name), "${cls.name}")
+        exportZip(listOf(cls), ExportService.eokulZipName(cls.name), "${cls.name}")
     }
 
     /**
@@ -863,13 +863,6 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     fun exportAllFoldersZip() {
         exportZip(classes.toList(), "Tum-siniflar-klasorlu-${stamp()}.zip", "sınıf klasörleriyle", folders = true)
     }
-
-    private fun csvCell(v: String): String {
-        val t = v.replace("\"", "\"\"")
-        return if (t.contains(';') || t.contains('"') || t.contains('\n')) "\"$t\"" else t
-    }
-
-    private fun sanitizedZipName(className: String) = RosterParser.sanitizeFileName(className) + "-eokul.zip"
 
     private fun exportZip(snap: List<SchoolClass>, zipName: String, label: String, folders: Boolean = false) {
         val rootStr = settings.rootUri
@@ -881,51 +874,13 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val res = withContext(Dispatchers.IO) {
-                    // Yinelenen numaralar yazmadan önce belirlenir.
-                    val seen = HashSet<String>()
-                    val dups = ArrayList<String>()
-                    val items = ArrayList<Pair<String, File>>()
-                    for (cls in snap) for (st in cls.students) {
-                        if (!st.captured) continue
-                        val f = Naming.privatePhoto(ctx, cls.id, st.no)
-                        if (!f.exists()) continue
-                        // Düz düzende numara tüm okulda tek olmalı; klasörlü düzende yalnızca sınıf içinde.
-                        val key = if (folders) cls.id + "|" + st.no else st.no
-                        if (!seen.add(key)) {
-                            dups.add("${st.no} (${cls.name})")
-                            continue
-                        }
-                        val entry = if (folders)
-                            RosterParser.sanitizeFileName(cls.name) + "/" + RosterParser.studentStem(st.no, st.name) + ".jpg"
-                        else st.no + ".jpg"
-                        items.add(entry to f)
-                    }
-                    if (items.isNotEmpty()) {
+                    val plan = ExportService.plan(snap, folders) { cls, st -> Naming.privatePhoto(ctx, cls.id, st.no) }
+                    if (plan.items.isNotEmpty()) {
                         Output.writeStream(ctx, root, emptyList(), zipName, "application/zip") { out ->
-                            java.util.zip.ZipOutputStream(out).use { zip ->
-                                if (folders) {
-                                    // Excel'in Türkçe karakterleri doğru açması için UTF-8 BOM + noktalı virgül
-                                    zip.putNextEntry(java.util.zip.ZipEntry("rapor.csv"))
-                                    val sb = StringBuilder("\uFEFFSınıf;No;Ad Soyad;Durum;Kalite puanı;Tekrar çekilmeli\r\n")
-                                    for (cls in snap) for (st in cls.students) {
-                                        sb.append(csvCell(cls.name)).append(';').append(csvCell(st.no)).append(';')
-                                            .append(csvCell(st.name)).append(';')
-                                            .append(if (st.captured) "Çekildi" else "Bekliyor").append(';')
-                                            .append(if (st.captured && st.score >= 0) st.score.toString() else "").append(';')
-                                            .append(if (st.retake) "Evet" else "").append("\r\n")
-                                    }
-                                    zip.write(sb.toString().toByteArray(Charsets.UTF_8))
-                                    zip.closeEntry()
-                                }
-                                for ((entry, f) in items) {
-                                    zip.putNextEntry(java.util.zip.ZipEntry(entry))
-                                    f.inputStream().use { it.copyTo(zip) }
-                                    zip.closeEntry()
-                                }
-                            }
+                            ExportService.writeZip(out, plan, snap, withReport = folders)
                         }
                     }
-                    items.size to dups
+                    plan.items.size to plan.duplicates
                 }
                 val (n, dups) = res
                 say(
