@@ -64,3 +64,39 @@ class SaveRulesTest {
         assertFalse(t.exists())
     }
 }
+
+class InitialBoxTest {
+    private val def = Box(10.0, 20.0, 143.0, 191.0)
+    private val saved = Box(100.0, 200.0, 233.0, 371.0)
+
+    @org.junit.Test fun yuzVeDogrudanDuzenleme_varsayilanKutu() {
+        val c = InitialBox.choose(true, true, saved, 1000, 1000, 1000, 1000) { def }
+        org.junit.Assert.assertTrue(c.auto)
+        org.junit.Assert.assertSame(def, c.box)
+    }
+
+    @org.junit.Test fun yuzYoksa_kayitliKutu() {
+        val c = InitialBox.choose(true, false, saved, 1000, 1000, 1000, 1000) { def }
+        org.junit.Assert.assertFalse(c.auto)
+        org.junit.Assert.assertEquals(saved.x1, c.box.x1, 1.0)
+        org.junit.Assert.assertEquals(saved.y1, c.box.y1, 1.0)
+    }
+
+    @org.junit.Test fun kayitliKutu_kucultulmusOrijinaleOlceklenir() {
+        val c = InitialBox.choose(true, false, saved, 1000, 1000, 500, 500) { def }
+        org.junit.Assert.assertEquals(50.0, c.box.x1, 1.0)
+        org.junit.Assert.assertEquals(100.0, c.box.y1, 1.0)
+    }
+
+    @org.junit.Test fun normalCekimdeKayitliKutuYok_varsayilan() {
+        val c = InitialBox.choose(false, true, null, 0, 0, 1000, 1000) { def }
+        org.junit.Assert.assertFalse(c.auto)
+        org.junit.Assert.assertSame(def, c.box)
+    }
+
+    @org.junit.Test fun normalCekimdeYuzVarVeKayitliKutuVar_kayitliKullanilir() {
+        val c = InitialBox.choose(false, true, saved, 1000, 1000, 1000, 1000) { def }
+        org.junit.Assert.assertFalse(c.auto)
+        org.junit.Assert.assertEquals(saved.x1, c.box.x1, 1.0)
+    }
+}

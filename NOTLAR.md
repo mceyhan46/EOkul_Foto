@@ -211,3 +211,14 @@ Katmanlar (bağımlılık yönü aşağıya doğru):
 4. `StudioViewModel` — yalnızca durumu (liste, ekran yığını, kilitler) tutar ve servisleri sırayla çağırır; iş kuralı içermemeli.
 5. Ekranlar (Compose) — yalnızca ViewModel'e bakar. Renkler `AppColors.kt`.
 Kural: yeni iş mantığı önce 1. ya da 2. katmanda test edilerek yazılır; ViewModel'e kural eklenmez.
+
+### Ayrıştırma durumu (1.1.43)
+`StudioViewModel` 1530 → ~1150 satır; iş kuralları şu dosyalara taşındı (hepsinin Kotlin/JUnit testi var):
+- `ExportService` — ZIP planı (yinelenen numara), `rapor.csv` (BOM, `;`, kaçış), ZIP yazımı.
+- `DataAudit` — veri denetimi raporu, klasör denetimi satırları, eksik dosya onarım listesi.
+- `RosterRules` — sınıf/öğrenci ekleme, yeniden adlandırma, numara değiştirme, liste ve şube içe aktarma, çapraz sınıf uyarısı.
+- `SaveRules` + `AtomicPhoto` — orijinal uzantısı/küçültme kararı, sınıf bitiş özeti, uygulama içi kopyanın atomik yazımı (hata → eski dosya geri gelir).
+- `InitialBox` — "Kırpmayı düzenle"de başlangıç kutusu seçimi (yüz varsa varsayılan, yoksa kayıtlı kutu, boyut ölçekleme).
+- `PinLock` — yanlış PIN bekleme süresi (kalıcı sayaç) ve arka plan kilit kararı.
+Android uyarlayıcıları (testsiz, ince): `PhotoSaver` (SAF yazım sırası), `FolderService` (klasör/dosya silme-adlandırma), `SafBackupStorage`.
+ViewModel'de kalanlar: durum, ekran yığını, mutex/sürüm kontrollü kayıt, kamera/inceleme akışı koordinasyonu, ileti gösterimi.

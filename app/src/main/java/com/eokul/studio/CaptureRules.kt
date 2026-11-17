@@ -71,3 +71,23 @@ object SaveRules {
         return sb.toString()
     }
 }
+
+/** "Kırpmayı düzenle"/inceleme açılırken başlangıç kırpma kutusunun seçimi (saf kural). */
+object InitialBox {
+    class Choice(val box: Box, val auto: Boolean)
+
+    /**
+     * Doğrudan düzenlemede yüz bulunduysa ([directEdit] && [hasFace]) kutu güncel varsayılan ayarlardan ([defaultBox]) hesaplanır;
+     * aksi hâlde kayıtlı kutu, çekim anındaki boyuttan ([savedW]x[savedH]) açılan görüntüye ölçeklenir. Kayıtlı kutu yoksa varsayılan.
+     */
+    fun choose(
+        directEdit: Boolean, hasFace: Boolean, saved: Box?, savedW: Int, savedH: Int,
+        iw: Int, ih: Int, defaultBox: () -> Box
+    ): Choice {
+        val auto = directEdit && hasFace
+        val box = if (saved != null && !auto) {
+            Box.of(com.eokul.studio.core.Crop.scaleBox(saved.toArray(), savedW, savedH, iw, ih)).fitInside(iw, ih)
+        } else defaultBox()
+        return Choice(box, auto)
+    }
+}

@@ -610,14 +610,11 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 s.ih = dims.second
                 // "Kırpmayı düzenle": yüz bulunursa kutu, güncel varsayılan kırpma ayarlarına göre yüzün merkezine (göz ortası)
                 // hizalı yeniden hesaplanır; böylece her fotoğraf aynı ölçüt ve konumla açılır. Yüz yoksa kayıtlı kutu kullanılır.
-                val autoBox = directEdit && faces.isNotEmpty()
-                val box = if (savedBox != null && !autoBox) {
-                    // Kayıtlı kutu çekim anındaki görüntü boyutundadır; açılan orijinal küçültülmüş olabilir → ölçekle
-                    Box.of(Crop.scaleBox(savedBox.toArray(), savedBoxW, savedBoxH, dims.first, dims.second))
-                        .fitInside(dims.first, dims.second)
-                } else {
-                    ImageOps.defaultBox(dims.first, dims.second, faces.firstOrNull(), set)
-                }
+                val choice = InitialBox.choose(
+                    directEdit, faces.isNotEmpty(), savedBox, savedBoxW, savedBoxH, dims.first, dims.second
+                ) { ImageOps.defaultBox(dims.first, dims.second, faces.firstOrNull(), set) }
+                val box = choice.box
+                val autoBox = choice.auto
                 s.box = box
                 s.startBox = box
                 s.faces = faces
