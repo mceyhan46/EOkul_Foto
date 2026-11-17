@@ -1074,45 +1074,22 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val snap = classes.toList()
         viewModelScope.launch {
             val report = withContext(Dispatchers.IO) {
-                val missing = ArrayList<String>()
-                val broken = ArrayList<String>()
-                val orphans = ArrayList<String>()
-                val dupNo = HashMap<String, MutableList<String>>()
-                var checked = 0
-                for (c in snap) {
-                    val expected = HashSet<String>()
-                    for (s in c.students) {
-                        dupNo.getOrPut(s.no) { ArrayList() }.add(c.name)
-                        val f = Naming.privatePhoto(ctx, c.id, s.no)
-                        expected.add(f.name)
-                        if (!s.captured) continue
-                        checked++
-                        if (!f.exists()) {
-                            missing.add("${c.name} · ${s.no} ${s.name}")
-                            continue
+                val local = DataAudit.local(
+                    snap,
+                    photoState = { c, st ->
+                        val f = Naming.privatePhoto(ctx, c.id, st.no)
+                        if (!f.exists()) DataAudit.Photo.MISSING
+                        else {
+                            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            android.graphics.BitmapFactory.decodeFile(f.path, o)
+                            if (o.outWidth != TARGET_W || o.outHeight != TARGET_H) DataAudit.Photo.BAD_SIZE else DataAudit.Photo.OK
                         }
-                        val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        android.graphics.BitmapFactory.decodeFile(f.path, o)
-                        if (o.outWidth != TARGET_W || o.outHeight != TARGET_H) broken.add("${c.name} · ${s.no} ${s.name}")
-                    }
-                    Naming.privateDir(ctx, c.id).listFiles()?.forEach { f ->
-                        if (f.name !in expected) orphans.add("${c.name} · ${f.name}")
-                    }
-                }
-                val dups = dupNo.filter { it.value.size > 1 }.map { "${it.key} → ${it.value.joinToString(", ")}" }
-                fun block(title: String, items: List<String>): String =
-                    if (items.isEmpty()) "✓ $title: yok"
-                    else "⚠ $title: ${items.size}\n" + items.take(6).joinToString("\n") { "   • $it" } +
-                        if (items.size > 6) "\n   … ve ${items.size - 6} tane daha" else ""
+                    },
+                    expectedName = { c, st -> Naming.privatePhoto(ctx, c.id, st.no).name },
+                    privateFiles = { c -> Naming.privateDir(ctx, c.id).listFiles()?.map { it.name } ?: emptyList() }
+                )
                 val folder = try { folderAudit(snap) } catch (e: Throwable) { "Kayıt klasörü okunamadı: ${e.message ?: e.javaClass.simpleName}" }
-                listOf(
-                    "$checked fotoğraflı öğrenci kontrol edildi.",
-                    folder,
-                    block("Kaydı var, fotoğrafı yok", missing),
-                    block("Bozuk veya yanlış boyutlu fotoğraf", broken),
-                    block("Öğrencisi olmayan fotoğraf dosyası", orphans),
-                    block("Birden çok sınıfta geçen numara", dups)
-                ).joinToString("\n\n")
+                DataAudit.report(local, folder)
             }
             auditReport = report
         }
@@ -1125,40 +1102,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     private fun folderAudit(snap: List<SchoolClass>): String {
         val rootStr = settings.rootUri ?: return "⚠ Kayıt klasörü seçilmemiş."
         val root = Uri.parse(rootStr)
-        val lines = ArrayList<String>()
-        lines.add("Kayıt klasörü: ${rootName ?: "?"}")
-        var rootNames: List<String>? = null
-        for (c in snap) {
-            val captured = c.students.filter { it.captured }
-            if (captured.isEmpty()) continue
-            val dirName = RosterParser.sanitizeFileName(c.name)
-            val main = Output.listNames(ctx, root, listOf(dirName))
-            if (main == null) {
-                if (rootNames == null) rootNames = Output.listNames(ctx, root, emptyList()) ?: emptyList()
-                lines.add("⚠ ${c.name}: '$dirName' klasörü kayıt klasöründe YOK (${captured.size} fotoğraflı öğrenci). Kökte bulunanlar: " +
-                    rootNames.take(15).joinToString(", ").ifEmpty { "(boş)" })
-                continue
-            }
-            val origNames = Output.listNames(ctx, root, listOf(dirName, ORIGINALS_DIR))
-            val mainSet = main.toHashSet()
-            var noMain = 0
-            var noOrig = 0
-            for (s in captured) {
-                val stem = s.savedStem ?: RosterParser.studentStem(s.no, s.name)
-                if ("$stem.jpg" !in mainSet) noMain++
-                if (origNames == null || origNames.none { it.startsWith("$stem.") }) noOrig++
-            }
-            val hidden = main.count { it.startsWith(".tmp-") || it.startsWith(".old-") } +
-                (origNames?.count { it.startsWith(".tmp-") || it.startsWith(".old-") } ?: 0)
-            lines.add(
-                (if (noMain == 0 && noOrig == 0) "✓ " else "⚠ ") + "${c.name}: ${captured.size} çekilmiş · klasörde fotoğraf eksik: $noMain · " +
-                    (if (origNames == null) "Orijinaller klasörü YOK" else "orijinal eksik: $noOrig") +
-                    (if (hidden > 0) " · yarım kalmış gizli dosya: $hidden" else "") +
-                    " (klasörde ${main.size} öğe)"
-            )
-        }
-        if (lines.size == 1) lines.add("Çekilmiş öğrenci yok.")
-        return lines.joinToString("\n")
+        return DataAudit.folderLines(snap, rootName, ORIGINALS_DIR) { path -> Output.listNames(ctx, root, path) }
     }
 
     /**
@@ -1177,10 +1121,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     for (c in snap) {
                         val dirName = RosterParser.sanitizeFileName(c.name)
                         val have = (Output.listNames(ctx, root, listOf(dirName)) ?: emptyList()).toHashSet()
-                        for (s in c.students) {
-                            if (!s.captured) continue
-                            val stem = s.savedStem ?: RosterParser.studentStem(s.no, s.name)
-                            if ("$stem.jpg" in have) continue
+                        for ((s, stem) in DataAudit.missingInFolder(c, have)) {
                             val priv = Naming.privatePhoto(ctx, c.id, s.no)
                             if (!priv.exists() || priv.length() <= 0L) { lost++; continue }
                             try {
