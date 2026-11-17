@@ -293,7 +293,7 @@ fun MultiImportScreen(studio: StudioViewModel) {
                     enabled = canImport,
                     modifier = Modifier.weight(2f).heightIn(min = 52.dp),
                     onClick = {
-                        studio.importBranches(names.mapIndexed { i, n -> StudioViewModel.BranchPlan(n, plans[i]) })
+                        studio.importBranches(names.mapIndexed { i, n -> RosterRules.BranchPlan(n, plans[i]) })
                         studio.back()
                     }
                 ) { Text(if (list == null) "Sınıfları ekle" else "${list.size} sınıfı ekle · $total öğrenci") }

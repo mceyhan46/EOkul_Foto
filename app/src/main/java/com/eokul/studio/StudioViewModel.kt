@@ -354,19 +354,18 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     private fun newId(): String =
         System.currentTimeMillis().toString(36) + (0..999).random().toString(36)
 
-    private fun folderKey(name: String): String = RosterParser.sanitizeFileName(name).lowercase()
+    /** Sınıf listesini (sıralı hâliyle) yerine koyar ve kaydeder. */
+    private fun replaceClasses(next: List<SchoolClass>) {
+        classes.clear()
+        classes.addAll(next)
+        persist()
+    }
 
     /** Yeni sınıf ekler; ad boşsa veya aynı adlı sınıf varsa null döner. */
     fun addClass(name: String): String? {
-        val n = RosterParser.normalizeSpaces(name)
-        if (n.isEmpty()) return null
-        if (classes.any { folderKey(it.name) == folderKey(n) }) return null
-        val c = SchoolClass(newId(), n)
-        val sorted = (classes.toList() + c).sortedWith { a, b -> compareNatural(a.name, b.name) }
-        classes.clear()
-        classes.addAll(sorted)
-        persist()
-        return c.id
+        val r = RosterRules.addClass(classes.toList(), name, ::newId) ?: return null
+        replaceClasses(r.first)
+        return r.second
     }
 
     /** Sınıfı yeniden adlandırır; kayıt klasöründeki klasörleri de (mümkünse) yeniden adlandırır. */
@@ -374,8 +373,9 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val c = classById(id) ?: return false
         val n = RosterParser.normalizeSpaces(name)
         if (n.isEmpty()) return false
-        if (classes.any { it.id != id && folderKey(it.name) == folderKey(n) }) {
-            say("Bu adla başka bir sınıf var")
+        val change = RosterRules.renameClass(classes.toList(), id, n)
+        if (!change.ok) {
+            say(change.error!!)
             return false
         }
         val oldDir = RosterParser.sanitizeFileName(c.name)
@@ -391,11 +391,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 if (!ok) say("⚠ Sınıf adı değişti ama kayıt klasörü '$oldDir' yeniden adlandırılamadı (hedef ad dolu olabilir). Dosyalar eski klasörde kaldı.")
             }
         }
-        val sorted = classes.map { if (it.id == id) it.copy(name = n) else it }
-            .sortedWith { a, b -> compareNatural(a.name, b.name) }
-        classes.clear()
-        classes.addAll(sorted)
-        persist()
+        replaceClasses(change.classes)
         return true
     }
 
@@ -425,85 +421,25 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ liste içe aktarma
     /** Sınıfa öğrenci ekler. [classId] null ise [newName] ile yeni sınıf açılır. Sonuç mesajı döner (hata: null). */
-    // ---- Aynı numaranın başka sınıflarda da bulunması: engellenmez, kullanıcı uyarılır.
-    private fun numbersByClass(): Map<String, Set<String>> =
-        classes.associate { c -> c.id to c.students.mapTo(HashSet()) { it.no } }
-
-    /** [no] başka sınıflarda da varsa uyarı metni, yoksa null. */
-    private fun crossClassWarning(no: String, classId: String): String? {
-        val ids = CrossClass.classesWith(no, numbersByClass(), classId)
-        if (ids.isEmpty()) return null
-        val names = ids.mapNotNull { classById(it)?.name }
-        val shown = names.take(3).joinToString(", ") + if (names.size > 3) " +${names.size - 3}" else ""
-        return "⚠ $no numarası başka sınıfta da var: $shown"
-    }
-
-    private fun sharedCount(rows: List<RosterParser.Row>, classId: String): Int =
-        CrossClass.countShared(rows.filter { it.error == null }.map { it.no }, numbersByClass(), classId)
-
     fun importRoster(classId: String?, newName: String, rows: List<RosterParser.Row>, mode: MergeMode): String? {
-        if (rows.isEmpty()) return null
-        val id = classId ?: addClass(newName) ?: return null
-        val cls = classById(id) ?: return null
-        val r = mergeStudents(cls.students, rows, mode)
-        updateClass(id) { it.copy(students = r.students) }
-        val parts = ArrayList<String>()
-        if (r.added > 0) parts.add("${r.added} eklendi")
-        if (r.updated > 0) parts.add("${r.updated} güncellendi")
-        if (r.removed > 0) parts.add("${r.removed} çıkarıldı")
-        val msg = if (parts.isEmpty()) "Değişiklik yok" else parts.joinToString(", ")
-        val shared = sharedCount(rows, id)
-        say("✓ $msg" + if (shared > 0) "\n⚠ $shared numara başka sınıflarda da var (Veri denetimi'nde listelenir)" else "")
-        return id
+        val r = RosterRules.importRoster(classes.toList(), classId, newName, rows, mode, ::newId) ?: return null
+        replaceClasses(r.classes)
+        say(r.message)
+        return r.classId
     }
 
-    /** Hazırlanmış şubeleri toplu ekler: aynı adlı sınıf varsa öğrencileri güncellenir, yoksa yeni sınıf açılır. */
-    class BranchPlan(val name: String, val rows: List<RosterParser.Row>)
-
-    fun importBranches(plans: List<BranchPlan>): String {
-        var created = 0
-        var merged = 0
-        var students = 0
-        var shared = 0
-        for (p in plans) {
-            if (p.rows.isEmpty()) continue
-            val n = RosterParser.normalizeSpaces(p.name)
-            if (n.isEmpty()) continue
-            val existing = classes.firstOrNull { folderKey(it.name) == folderKey(n) }
-            if (existing != null) {
-                val cls = classById(existing.id) ?: continue
-                val r = mergeStudents(cls.students, p.rows, MergeMode.UPSERT)
-                updateClass(existing.id) { it.copy(students = r.students) }
-                shared += sharedCount(p.rows, existing.id)
-                merged++
-            } else {
-                val id = addClass(n) ?: continue
-                val cls = classById(id) ?: continue
-                val r = mergeStudents(cls.students, p.rows, MergeMode.ADD)
-                updateClass(id) { it.copy(students = r.students) }
-                shared += sharedCount(p.rows, id)
-                created++
-            }
-            students += p.rows.size
-        }
-        val parts = ArrayList<String>()
-        if (created > 0) parts.add("$created sınıf eklendi")
-        if (merged > 0) parts.add("$merged sınıf güncellendi")
-        val msg = if (parts.isEmpty()) "Değişiklik yok" else parts.joinToString(", ") + " · $students öğrenci"
-        say("✓ $msg" + if (shared > 0) "\n⚠ $shared numara başka sınıflarda da var (Veri denetimi'nde listelenir)" else "")
-        return msg
+    fun importBranches(plans: List<RosterRules.BranchPlan>): String {
+        val r = RosterRules.importBranches(classes.toList(), plans, ::newId)
+        replaceClasses(r.classes)
+        say(r.message)
+        return r.message.removePrefix("✓ ").substringBefore("\n")
     }
 
     fun addStudent(classId: String, no: String, name: String): String? {
-        val n = no.trim()
-        val nm = RosterParser.normalizeSpaces(name)
-        if (!n.matches(Regex("\\d{1,11}"))) return "Numara 1–11 haneli sayı olmalı"
-        if (nm.length < 2) return "Ad soyad girin"
-        val c = classById(classId) ?: return "Sınıf bulunamadı"
-        if (c.students.any { it.no == n }) return "Bu numara zaten var"
-        val list = (c.students + Student(n, nm)).sortedWith { a, b -> RosterParser.compareNo(a.no, b.no) }
-        updateClass(classId) { it.copy(students = list) }
-        crossClassWarning(n, classId)?.let { say(it) }
+        val r = RosterRules.addStudent(classes.toList(), classId, no, name)
+        if (!r.ok) return r.error
+        replaceClasses(r.classes)
+        r.note?.let { say(it) }
         return null
     }
 
@@ -514,24 +450,15 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun editStudent(classId: String, oldNo: String, newNoRaw: String, name: String): String? {
         val newNo = newNoRaw.trim()
-        val nm = RosterParser.normalizeSpaces(name)
-        if (!newNo.matches(Regex("\\d{1,11}"))) return "Numara 1–11 haneli sayı olmalı"
-        if (nm.length < 2) return "Ad soyad girin"
-        val c = classById(classId) ?: return "Sınıf bulunamadı"
-        val st = c.students.firstOrNull { it.no == oldNo } ?: return "Öğrenci bulunamadı"
-        if (newNo == oldNo) return renameStudent(classId, oldNo, nm)
-        if (c.students.any { it.no == newNo }) return "Bu numara bu sınıfta zaten var"
+        val st = classById(classId)?.students?.firstOrNull { it.no == oldNo }
         val busy = capture?.let { it.classId == classId && it.no == oldNo } == true ||
             pendingCaptureOriginals.containsKey(captureKey(classId, oldNo))
-        if (busy) return "Bu öğrencinin fotoğrafı şu an işleniyor/kaydediliyor; birkaç saniye sonra tekrar deneyin"
-        updateClass(classId) { cl ->
-            cl.copy(
-                students = cl.students.map { if (it.no == oldNo) it.copy(no = newNo, name = nm) else it }
-                    .sortedWith { a, b -> RosterParser.compareNo(a.no, b.no) }
-            )
-        }
+        val r = RosterRules.editStudent(classes.toList(), classId, oldNo, newNo, name, busy)
+        if (!r.ok) return r.error
+        replaceClasses(r.classes)
+        if (newNo == oldNo || st == null) return null
         Ops.log("op", "name", "renumber", "ok", true)
-        crossClassWarning(newNo, classId)?.let { say(it) }
+        r.note?.let { say(it) }
         val wasCaptured = st.captured
         viewModelScope.launch(Dispatchers.IO) {
             saveMutex.withLock {
@@ -549,13 +476,6 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (wasCaptured) withContext(Dispatchers.Main) { syncFileNames(classId) }
         }
-        return null
-    }
-
-    private fun renameStudent(classId: String, no: String, name: String): String? {
-        val nm = RosterParser.normalizeSpaces(name)
-        if (nm.length < 2) return "Ad soyad girin"
-        updateStudent(classId, no) { it.copy(name = nm) }
         return null
     }
 
