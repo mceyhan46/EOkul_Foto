@@ -143,9 +143,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Uygulama arka plandan dönerse ve 30 sn'den uzun kaldıysa kilitler. */
     fun onForegrounded() {
-        if (settings.pinHash != null && backgroundedAt != 0L &&
-            System.currentTimeMillis() - backgroundedAt > 30_000L
-        ) locked = true
+        if (PinLock.shouldLock(settings.pinHash != null, backgroundedAt, System.currentTimeMillis())) locked = true
     }
 
     fun checkPin(pin: String): Boolean {
@@ -154,30 +152,28 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         return com.eokul.studio.core.PinCrypto.verify(pin, salt, h)
     }
 
-    // PIN deneme sınırı kalıcıdır: uygulamayı kapatıp açmak beklemeyi sıfırlamaz.
     private val lockPrefs by lazy { ctx.getSharedPreferences("eokul_lock", android.content.Context.MODE_PRIVATE) }
+    private val pinLock by lazy {
+        PinLock(object : LockStore {
+            override var fails: Int
+                get() = lockPrefs.getInt("fails", 0)
+                set(v) { lockPrefs.edit().putInt("fails", v).apply() }
+            override var until: Long
+                get() = lockPrefs.getLong("until", 0L)
+                set(v) { lockPrefs.edit().putLong("until", v).apply() }
+        })
+    }
 
     /** Yanlış denemeler nedeniyle kalan bekleme süresi (sn); 0 = deneme yapılabilir. */
-    fun pinWaitSeconds(): Int {
-        val until = lockPrefs.getLong("until", 0L)
-        val left = until - System.currentTimeMillis()
-        return if (left <= 0L) 0 else ((left + 999L) / 1000L).toInt()
-    }
-
-    private fun recordPinFailure() {
-        val fails = lockPrefs.getInt("fails", 0) + 1
-        val wait = com.eokul.studio.core.PinCrypto.waitSecondsAfterFailures(fails)
-        lockPrefs.edit().putInt("fails", fails).putLong("until", if (wait > 0) System.currentTimeMillis() + wait * 1000L else 0L).apply()
-        Ops.log("pin_fail", "fails", fails)
-    }
+    fun pinWaitSeconds(): Int = pinLock.waitSeconds()
 
     fun unlock(pin: String): Boolean {
         if (pinWaitSeconds() > 0) return false
         if (!checkPin(pin)) {
-            recordPinFailure()
+            Ops.log("pin_fail", "fails", pinLock.recordFailure())
             return false
         }
-        lockPrefs.edit().putInt("fails", 0).putLong("until", 0L).apply()
+        pinLock.reset()
         // Eski biçimle kaydedilmiş PIN doğru girildiğinde yeni biçime sessizce yükseltilir.
         val h = settings.pinHash
         val salt = settings.pinSalt
@@ -383,11 +379,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val root = settings.rootUri?.let { Uri.parse(it) }
         if (root != null && oldDir != newDir) {
             viewModelScope.launch {
-                val ok = withContext(Dispatchers.IO) {
-                    val a = Output.renameDir(ctx, root, emptyList(), oldDir, newDir)
-                    val b = Output.renameDir(ctx, root, listOf(EOKUL_DIR), oldDir, newDir)
-                    a && b
-                }
+                val ok = withContext(Dispatchers.IO) { folders.renameClassDirs(root, oldDir, newDir) }
                 if (!ok) say("⚠ Sınıf adı değişti ama kayıt klasörü '$oldDir' yeniden adlandırılamadı (hedef ad dolu olabilir). Dosyalar eski klasörde kaldı.")
             }
         }
@@ -402,13 +394,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         classes.removeAll { it.id == id }
         persist()
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                Naming.privateDir(ctx, id).deleteRecursively()
-                if (alsoFiles && root != null) {
-                    val dir = RosterParser.sanitizeFileName(c.name)
-                    Output.deleteDir(ctx, root, emptyList(), dir) && Output.deleteDir(ctx, root, listOf(EOKUL_DIR), dir)
-                } else true
-            }
+            val ok = withContext(Dispatchers.IO) { folders.deleteClass(id, c.name, if (alsoFiles) root else null) }
             say(
                 when {
                     !alsoFiles -> "“${c.name}” silindi (kayıt klasöründeki dosyalar duruyor)"
@@ -463,13 +449,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             saveMutex.withLock {
                 try {
-                    val from = Naming.privatePhoto(ctx, classId, oldNo)
-                    val to = Naming.privatePhoto(ctx, classId, newNo)
-                    if (from.exists()) {
-                        to.parentFile?.mkdirs()
-                        if (to.exists()) to.delete()
-                        if (!from.renameTo(to)) { from.copyTo(to, overwrite = true); from.delete() }
-                    }
+                    folders.renumberPrivate(classId, oldNo, newNo)
                 } catch (e: Throwable) {
                     Ops.error("renumber_private", e)
                 }
@@ -485,14 +465,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val st = cls?.students?.firstOrNull { it.no == no }
         val root = settings.rootUri?.let { Uri.parse(it) }
         updateClass(classId) { c -> c.copy(students = c.students.filter { it.no != no }) }
-        viewModelScope.launch(Dispatchers.IO) {
-            Naming.privatePhoto(ctx, classId, no).delete()
-            if (alsoFiles && cls != null && st != null && root != null) {
-                val dir = RosterParser.sanitizeFileName(cls.name)
-                st.savedStem?.let { Output.deletePath(ctx, root, listOf(dir), "$it.jpg") }
-                Output.deletePath(ctx, root, listOf(EOKUL_DIR, dir), "$no.jpg")
-                st.origUri?.let { Output.deleteUri(ctx, Uri.parse(it)) }
-            }
+        if (cls != null && st != null) {
+            viewModelScope.launch(Dispatchers.IO) { folders.deleteStudent(classId, cls.name, st, if (alsoFiles) root else null) }
         }
         say(if (alsoFiles) "Öğrenci ve kayıt klasöründeki dosyaları silindi" else "Öğrenci listeden çıkarıldı (kayıt klasöründeki dosyalar duruyor)")
     }
@@ -505,16 +479,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         updateStudent(classId, no) {
             it.copy(captured = false, box = null, origUri = null, savedStem = null, faceCount = 0, updatedAt = 0L, retake = false, score = -1)
         }
-        viewModelScope.launch(Dispatchers.IO) {
-            Naming.privatePhoto(ctx, classId, no).delete()
-            if (root != null) {
-                val dir = RosterParser.sanitizeFileName(cls.name)
-                val stem = st.savedStem
-                if (stem != null) Output.deletePath(ctx, root, listOf(dir), "$stem.jpg")
-                Output.deletePath(ctx, root, listOf(EOKUL_DIR, dir), "$no.jpg")
-            }
-            st.origUri?.let { Output.deleteUri(ctx, Uri.parse(it)) }
-        }
+        viewModelScope.launch(Dispatchers.IO) { folders.deletePhoto(classId, cls.name, st, root) }
         say("Fotoğraf silindi")
     }
 
@@ -1083,21 +1048,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         }
         val root = Uri.parse(rootStr)
         viewModelScope.launch {
-            val dir = RosterParser.sanitizeFileName(cls.name)
             var done = 0
-            val results = withContext(Dispatchers.IO) {
-                val out = ArrayList<Triple<String, String, String?>>()   // no, yeni stem, yeni orijinal uri
-                for (st in cls.students) {
-                    val old = st.savedStem ?: continue
-                    val stem = RosterParser.studentStem(st.no, st.name)
-                    if (!st.captured || old == stem) continue
-                    if (Output.renameFile(ctx, root, listOf(dir), "$old.jpg", "$stem.jpg")) {
-                        val nu = st.origUri?.let { Output.renameUri(ctx, Uri.parse(it), stem) }
-                        out.add(Triple(st.no, stem, nu?.toString() ?: st.origUri))
-                    }
-                }
-                out
-            }
+            val results = withContext(Dispatchers.IO) { folders.syncNames(root, cls) }
             for ((no, stem, orig) in results) {
                 updateStudent(classId, no) { it.copy(savedStem = stem, origUri = orig) }
                 done++
@@ -1107,7 +1059,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ------------------------------------------------------------------ kaydetme
-        private val photoSaver by lazy { PhotoSaver(ctx) }
+        private val folders by lazy { FolderService(ctx) }
+    private val photoSaver by lazy { PhotoSaver(ctx) }
 
     fun saveCapture() {
         if (isRestoring) {
