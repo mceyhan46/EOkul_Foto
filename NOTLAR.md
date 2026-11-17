@@ -189,3 +189,16 @@ Geri yukleme/onizleme sinirlari ve yol denetimi -> core/RestoreGuard.java (Budge
 
 ## Capraz sinif ayni numara uyarisi (14 Kas)
 core/CrossClass.java (+CrossClassTest, 130 test). Engellemez: ogrenci ekle/numara degistir sonrasi "numara baska sinifta da var: ..." mesaji; liste ve sube iceri aktarimda "N numara baska siniflarda da var" notu. Ayrintisi Veri denetimi'nde.
+
+## Renkler, yedek saklama (1.1.20)
+- Tüm renkler `AppColors.kt` içinde: Material şemaları, `SoftColors` (ana ekran pastelleri), `StatusColors`, `DarkUi` (koyu ekranlar), `ButtonColors`. Başka dosyada `Color(0x…)` yazılmaz.
+- "Geri yükleme öncesi" güvenlik yedeklerinden en yeni 2'si tutulur, eskileri geri yükleme sonrası otomatik silinir (`BackupRetention`). Kullanıcının "Yedekle" ile aldığı zip'lere dokunulmaz.
+- Geri yükleme onayında yedeğin sürümü, tarihi ve "tekrar işaretli" sayısı gösterilir.
+
+## Tanılama (1.1.26)
+- Rapor araçları Ayarlar > "Gelişmiş: tanılama ve rapor" altında katlı. Günlük (OpLog/Ops) hiçbir hatada çağıranı etkilemez; başlatma hatası uygulamayı açılışta durdurmaz.
+
+## Yedek adları, kırpma, PDF (1.1.28)
+- Yedekler kayıt klasörü/Yedek altına, `Ydk_ggaayy_ssdd.zip` adıyla yazılır; önek Ayarlar'dan değiştirilir (`BackupNames`). Güvenlik yedeği `Onc_…`, rapor `Rpr_…`. Eski adlı güvenlik yedekleri de temizlikte tanınır.
+- "Kırpmayı düzenle": yüz bulunursa kutu güncel ayarlara göre göz ortasına hizalı yeniden hesaplanır; yüz yoksa kayıtlı kutu.
+- PDF: kayıt klasörü/PDF/Foto_ggaayy_ssdd.pdf; 7 sütun, sınıf başına yeni sayfa (`PdfGrid`, `ClassPdf`).

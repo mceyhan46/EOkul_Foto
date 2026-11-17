@@ -92,4 +92,26 @@ public class OpLogTest {
         assertTrue(msg, msg.contains("<dosya>"));
         assertEquals("sıradan metin 12 değişmez", OpLog.scrub("sıradan metin 12 değişmez"));
     }
+
+    @Test public void bozukDegerCagiraniEtkilemez() throws Exception {
+        OpLog log = new OpLog(tmp(), 1 << 20);
+        Object kotu = new Object() {
+            @Override public String toString() { throw new IllegalStateException("toString patladı"); }
+        };
+        log.log("x", "k", kotu);          // istisna fırlatmamalı
+        log.log("y", "ok", 1);
+        List<OpLog.Event> ev = log.readAll();
+        assertEquals(1, ev.size());       // bozuk olay atlanır, sonrakiler yazılır
+        assertEquals("y", ev.get(0).type);
+    }
+
+    @Test public void yazilamayanKonumdaUygulamayiEtkilemez() throws Exception {
+        File d = Files.createTempDirectory("oplog").toFile();
+        File dosya = new File(d, "engel");
+        assertTrue(dosya.createNewFile());
+        OpLog log = new OpLog(new File(dosya, "alt/oplog.jsonl"), 1 << 20);   // üst yol bir dosya: yazılamaz
+        log.log("x", "a", 1);
+        assertTrue(log.readAll().isEmpty());
+        assertEquals(0L, log.sizeBytes());
+    }
 }

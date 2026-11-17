@@ -126,7 +126,7 @@ fun SheetScreen(studio: StudioViewModel, classId: String) {
                     Box(
                         Modifier.fillMaxWidth().aspectRatio(TARGET_W.toFloat() / TARGET_H)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0x22888888))
+                            .background(DarkUi.Overlay)
                             .border(
                                 if (s.captured) 0.dp else 1.dp,
                                 if (s.captured) Color.Transparent else MaterialTheme.colorScheme.error,
@@ -175,12 +175,12 @@ private fun PhotoPager(
     BackHandler { onClose() }
     val page = pager.currentPage.coerceIn(0, total - 1)
     val cur = list[page]
-    val okColor = Color(0xFF4CC38A)
-    val warnColor = Color(0xFFE0A030)
+    val okColor = DarkUi.ScoreGood
+    val warnColor = DarkUi.WarnAlt
     val onDark = Color.White
-    val dim = Color(0xFFA9B3C4)
+    val dim = DarkUi.DimSheet
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF0E1420))) {
+    Column(Modifier.fillMaxSize().background(DarkUi.SheetBg)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             BackBtn(onClick = onClose, tint = onDark)
             Column(Modifier.weight(1f)) {
@@ -196,7 +196,7 @@ private fun PhotoPager(
         }
         LinearProgressIndicator(
             progress = { (page + 1f) / total },
-            color = MaterialTheme.colorScheme.primary, trackColor = Color(0xFF232D3F),
+            color = MaterialTheme.colorScheme.primary, trackColor = DarkUi.Track,
             modifier = Modifier.fillMaxWidth()
         )
         HorizontalPager(

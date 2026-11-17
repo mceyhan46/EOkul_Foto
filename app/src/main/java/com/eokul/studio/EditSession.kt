@@ -75,21 +75,9 @@ class EditSession(val name: String) {
             zoom(factor, box.cx, box.cy)
             return
         }
-        val maxW = min(iw.toDouble(), ih * RATIO)
-        val minW = min(40.0, maxW)
-        var newW = box.width * factor
-        if (factor < 1.0) {
-            val floorH = (f.box.y2 - box.y1) * 1.03
-            val floorW = maxOf(floorH * RATIO, f.box.width * 1.15, minW)
-            if (floorW >= box.width) return
-            newW = maxOf(newW, floorW)
-        }
-        newW = newW.coerceIn(minW, maxW)
-        if (abs(newW - box.width) < 1e-6) return
-        val k = newW / box.width
-        val x1 = f.box.cx + (box.x1 - f.box.cx) * k
+        val r = Crop.zoomAnchored(box.toArray(), f.centerX, f.box.y2, f.box.width, factor, iw, ih, RATIO) ?: return
         push(box, true)
-        box = Box.of(Crop.fitInside(doubleArrayOf(x1, box.y1, x1 + newW, box.y1 + newW / RATIO), iw, ih, RATIO))
+        box = Box.of(r)
     }
 
     fun moveBox(b: Box) {

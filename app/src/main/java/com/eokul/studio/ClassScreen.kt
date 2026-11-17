@@ -141,6 +141,10 @@ fun ClassScreen(studio: StudioViewModel, classId: String) {
                                     toolsOpen = false
                                     studio.exportEokulZip(cls.id)
                                 })
+                                DropdownMenuItem(text = { Text("Sınıf listesini PDF yap") }, onClick = {
+                                    toolsOpen = false
+                                    studio.exportClassesPdf(cls.id)
+                                })
                                 val stale = studio.staleNameCount(cls.id)
                                 if (stale > 0) {
                                     DropdownMenuItem(text = { Text("Dosya adlarını güncelle ($stale)") }, onClick = {
@@ -366,8 +370,8 @@ private fun StudentRow(
             }
         }
     }
-    val okColor = Color(0xFF3C9A5F)
-    val warnColor = Color(0xFFE08A00)
+    val okColor = StatusColors.Done
+    val warnColor = StatusColors.Warn
     val stateColor = when {
         s.retake || s.isLow() -> warnColor
         s.captured -> okColor

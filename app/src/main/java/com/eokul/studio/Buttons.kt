@@ -17,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,10 +36,10 @@ enum class BtnStyle { Primary, Secondary, Danger, Tertiary }
 val BtnHeight = 52.dp
 private val BtnShape = RoundedCornerShape(16.dp)
 private val BtnPad = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-private val DangerRed = Color(0xFFE5645F)
-private val DarkSurface = Color(0xFF2A3042)
-private val DarkOnSurface = Color(0xFFE8EBF4)
-private val DarkDisabled = Color(0xFF59627A)
+private val DangerRed = DarkUi.Danger
+private val DarkSurface = ButtonColors.DarkSurface
+private val DarkOnSurface = ButtonColors.DarkOnSurface
+private val DarkDisabled = ButtonColors.DarkDisabled
 
 @Composable
 fun AppButton(
@@ -75,7 +74,7 @@ fun AppButton(
             onClick = onClick, modifier = m, enabled = enabled, shape = BtnShape, contentPadding = pad,
             colors = if (dark) ButtonDefaults.buttonColors(
                 containerColor = DarkSurface, contentColor = DarkOnSurface,
-                disabledContainerColor = Color(0xFF1B1F2B), disabledContentColor = DarkDisabled
+                disabledContainerColor = ButtonColors.DarkDisabledBg, disabledContentColor = DarkDisabled
             ) else ButtonDefaults.filledTonalButtonColors(),
             content = content
         )

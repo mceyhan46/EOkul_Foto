@@ -40,20 +40,13 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolean, onClose: () -> Unit) {
     BackHandler { if (!studio.isRestoring) onClose() }
-    var confirmRestore by remember { mutableStateOf<Uri?>(null) }
-    var restoreInfo by remember { mutableStateOf<StudioViewModel.BackupInfo?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var advanced by remember { mutableStateOf(false) }
+    var diagOpen by remember { mutableStateOf(false) }
+    var backupPrefix by remember { mutableStateOf(vm.settings.backupPrefix) }
     var sideGaps by remember { mutableStateOf(false) }
     var pinOpen by remember { mutableStateOf(false) }
-    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) scope.launch {
-            // Önce içeriğine bakılır: geçerli bir yedek değilse hiçbir şey değişmeden uyarı verilir.
-            val info = studio.inspectBackup(uri)
-            if (info == null) studio.toast("Bu dosya geçerli bir yedek değil (roster.json ve sınıf listesi bulunamadı). Mevcut veriye dokunulmadı.")
-            else { restoreInfo = info; confirmRestore = uri }
-        }
-    }
+    val startRestore = rememberRestoreFlow(studio)
     val reportSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
         if (uri != null) studio.saveReportTo(uri)
     }
@@ -114,6 +107,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         error = problem
         if (problem != null || kb == null || mkb == null || pw == null || ph == null) return null
         return vm.settings.copy(
+            backupPrefix = com.eokul.studio.core.BackupNames.sanitizePrefix(backupPrefix),
             serialMode = serial,
             autoTol = (autoTol * 100.0).roundToInt() / 100.0,
             autoHoldMs = ((autoHold / 100f).roundToInt() * 100).coerceIn(400, 4000),
@@ -360,7 +354,11 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         }
 
         }
-        SettingsCard("Tanılama ve rapor", "Çekim ve kayıt işlemlerinin kaydı") {
+        SettingsCard("Gelişmiş: tanılama ve rapor", "Yalnızca bir sorun olduğunda gerekir") {
+            TextButton(onClick = { diagOpen = !diagOpen }) {
+                Text(if (diagOpen) "▾ Rapor araçlarını gizle" else "▸ Rapor araçlarını göster")
+            }
+            if (diagOpen) {
             Text(
                 "Uygulama çekim, puanlama, kayıt ve hataları öğrenci adı olmadan cihazda tutar. Bir sorun olduğunda raporu alıp geliştiriciye iletin; hız ve hatalar buradan analiz edilir.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -386,6 +384,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp)
             )
+            }
         }
         SettingsCard("Güvenlik ve yedek", "PIN kilidi ve yedekleme") {
         OutlinedButton(onClick = { pinOpen = true }) {
@@ -400,7 +399,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             AppButton("Yedekle", onClick = { studio.backup() }, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
             AppButton(
                 "Geri yükle",
-                onClick = { restorePicker.launch(arrayOf("application/zip", "application/octet-stream")) },
+                onClick = startRestore,
                 style = BtnStyle.Secondary, modifier = Modifier.weight(1f)
             )
         }
@@ -412,8 +411,17 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             modifier = Modifier.padding(top = 6.dp)
         )
         Text(
-            "Yedek: sınıf listeleri ve küçük fotoğraflar kayıt klasörüne EOkulStudio_Yedek_tarih.zip olarak yazılır ve yazıldıktan sonra doğrulanır. Tam çözünürlüklü orijinaller yedeğe girmez.",
+            "Yedek: sınıf listeleri ve küçük fotoğraflar kayıt klasörünün içindeki “Yedek” klasörüne Ydk_160726_0816.zip gibi (gün-ay-yıl_saat-dakika) yazılır ve yazıldıktan sonra doğrulanır. Tam çözünürlüklü orijinaller yedeğe girmez.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.size(10.dp))
+        OutlinedTextField(
+            value = backupPrefix, onValueChange = { backupPrefix = it.take(com.eokul.studio.core.BackupNames.MAX_PREFIX) },
+            label = { Text("Yedek dosya adı öneki") }, singleLine = true,
+            supportingText = {
+                Text("Örnek: ${com.eokul.studio.core.BackupNames.sanitizePrefix(backupPrefix)}_160726_0816.zip · yalnızca harf, rakam, - ve _ ; “Kaydet” ile geçerli olur")
+            },
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.size(10.dp))
         Text("Yeni sürüme veya yeni telefona geçiş", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
@@ -422,7 +430,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
                 "2. Yedek dosyası kayıt klasörünüzde durur; uygulamayı silmek onu silmez.\n" +
                 "3. Eski uygulamayı kaldırıp yeni APK’yı kurun (imza değiştiyse güncelleme üstüne kurulmaz).\n" +
                 "4. Açılışta aynı kayıt klasörünü yeniden seçin.\n" +
-                "5. “Geri yükle” ile EOkulStudio_Yedek_….zip dosyasını seçin; içeriği önce gösterilir, geri yüklemeden önce mevcut verinin ayrı bir kopyası otomatik alınır.",
+                "5. “Geri yükle” ile yedek zip dosyasını (Yedek klasöründe) seçin; içeriği önce gösterilir, geri yüklemeden önce mevcut verinin ayrı bir kopyası otomatik alınır.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         }
@@ -479,37 +487,6 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
     }
 
     if (pinOpen) PinDialog(studio, vm.settings.pinHash != null) { pinOpen = false }
-
-    val rs = confirmRestore
-    if (rs != null) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { confirmRestore = null },
-            title = { Text("Yedekten geri yüklensin mi?") },
-            text = {
-                val ri = restoreInfo
-                val dateFmt = java.text.SimpleDateFormat("d MMM yyyy HH:mm", java.util.Locale.forLanguageTag("tr"))
-                Text(
-                    (if (ri != null)
-                        "Yedekte: ${ri.classes} sınıf · ${ri.students} öğrenci (${ri.captured} fotoğraflı)" +
-                            (ri.createdMs?.let { " · " + dateFmt.format(java.util.Date(it)) } ?: "") + "\n"
-                    else "") +
-                        "Şu an uygulamada: ${studio.classes.size} sınıf · ${studio.classes.sumOf { it.students.size }} öğrenci\n\n" +
-                        "Uygulamadaki tüm sınıf listeleri ve küçük fotoğraflar yedekteki ile DEĞİŞTİRİLİR. " +
-                        "Değiştirmeden önce mevcut verinin ayrı bir kopyası (EOkulStudio_GeriYuklemeOncesi_….zip) kayıt klasörüne otomatik alınır."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !studio.isRestoring,
-                    onClick = {
-                        confirmRestore = null
-                        studio.restore(rs)
-                    }
-                ) { Text(if (studio.isRestoring) "Yükleniyor…" else "Geri yükle") }
-            },
-            dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Vazgeç") } }
-        )
-    }
 }
 
 /** Ayarlar bölümü: başlık, kısa açıklama ve içerik tek, sade kartta. */

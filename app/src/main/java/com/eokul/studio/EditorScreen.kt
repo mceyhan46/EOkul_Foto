@@ -50,11 +50,12 @@ import kotlinx.coroutines.withContext
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private val EditorBg = Color(0xFF101014)
-private val Accent = Color(0xFF7AA2F7)
-private val FaceColor = Color(0xFF9ECE6A)
-private val WarnTxt = Color(0xFFE0AF68)
-private val DimTxt = Color(0xFFB0B6C8)
+private val EditorBg = DarkUi.Bg
+private val Accent = DarkUi.Accent
+private val FaceColor = DarkUi.Ok
+private val CenterLine = DarkUi.Highlight
+private val WarnTxt = DarkUi.Warn
+private val DimTxt = DarkUi.Dim
 
 /** Görüntünün tuval üzerindeki ölçeği ve ofseti. */
 private class ViewTf(val scale: Float, val ox: Float, val oy: Float)
@@ -195,6 +196,10 @@ fun EditorContent(
                         drawLine(grid, Offset(bx1, gy), Offset(bx2, gy), strokeWidth = 1f)
                     }
 
+                    // Merkez çizgisi: kutunun dikey orta ekseni. Yüzün orta çizgisi (aşağıda, ilk yüz) bununla üst üste gelmeli.
+                    val mid = (bx1 + bx2) / 2f
+                    drawLine(CenterLine, Offset(mid, by1), Offset(mid, by2), strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 10f)))
+
                     // Algılanan yüzler
                     val dash = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))
                     s.faces.forEachIndexed { i, f ->
@@ -208,6 +213,13 @@ fun EditorContent(
                             size = Size(fx2 - fx1, fy2 - fy1),
                             style = Stroke(width = 2f, pathEffect = dash)
                         )
+                        if (i == 0) {
+                            // Yüz merkezi (burun): küçük artı işareti; kutu merkez çizgisiyle karşılaştırmak için
+                            val fcx = tf.ox + (f.centerX * tf.scale).toFloat()
+                            val fcy = (fy1 + fy2) / 2f
+                            drawLine(CenterLine, Offset(fcx - 14f, fcy), Offset(fcx + 14f, fcy), strokeWidth = 3f)
+                            drawLine(CenterLine, Offset(fcx, fcy - 14f), Offset(fcx, fcy + 14f), strokeWidth = 3f)
+                        }
                         if (!f.headTop.isNaN()) {
                             val hy = tf.oy + (f.headTop * tf.scale).toFloat()
                             drawLine(

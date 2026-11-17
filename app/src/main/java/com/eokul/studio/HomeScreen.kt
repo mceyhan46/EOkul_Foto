@@ -1,8 +1,22 @@
 package com.eokul.studio
 
 import android.net.Uri
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import kotlinx.coroutines.launch
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +36,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -39,9 +54,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.draw.alpha
 
 @Composable
 fun HomeScreen(studio: StudioViewModel) {
@@ -53,126 +75,112 @@ fun HomeScreen(studio: StudioViewModel) {
     var deleteId by remember { mutableStateOf<String?>(null) }
     var alsoFilesClass by remember { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            Surface(color = MaterialTheme.colorScheme.primaryContainer, tonalElevation = 2.dp) {
-                Row(
-                    Modifier.windowInsetsPadding(WindowInsets.statusBars)
-                        .fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
+    val drawerState = androidx.compose.material3.rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val startRestore = rememberRestoreFlow(studio)
+    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
+    // Menüden bir işlem seçilince önce menü kapanır, sonra işlem başlar.
+    val closeThen: (() -> Unit) -> Unit = { action -> scope.launch { drawerState.close() }; action() }
+    androidx.compose.material3.ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = { HomeDrawer(studio, closeThen, startRestore) }
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                Surface(color = MaterialTheme.colorScheme.primaryContainer, tonalElevation = 2.dp) {
+                    Row(
+                        Modifier.windowInsetsPadding(WindowInsets.statusBars)
+                            .fillMaxWidth().padding(start = 4.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconBtn(
+                            Icons.Filled.Menu, "Menü",
+                            { scope.launch { drawerState.open() } },
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                         Text(
                             "E-Okul Foto Studio",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            "Öğrenci fotoğraflarını e-Okul ölçüsünde çekin, sınıf klasörlerine kaydedin.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f).padding(start = 4.dp)
                         )
                     }
-                    var toolsMenu by remember { mutableStateOf(false) }
-                    Box {
-                        MoreBtn(onClick = { toolsMenu = true }, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        DropdownMenu(expanded = toolsMenu, onDismissRequest = { toolsMenu = false }) {
-                            DropdownMenuItem(text = { Text("📋 Çoklu sınıf listesi (Excel)") }, onClick = {
-                                toolsMenu = false
-                                studio.navigate(Screen.MultiImport)
-                            })
-                            DropdownMenuItem(text = { Text("📁 Tüm sınıflar ZIP (klasörlü + rapor)") }, enabled = studio.classes.isNotEmpty(), onClick = {
-                                toolsMenu = false
-                                studio.exportAllFoldersZip()
-                            })
-                            DropdownMenuItem(text = { Text("🛠 Eksik klasör dosyalarını onar") }, enabled = studio.classes.isNotEmpty(), onClick = {
-                                toolsMenu = false
-                                studio.repairFolderFiles()
-                            })
-                            DropdownMenuItem(text = { Text("🩺 Veri denetimi") }, enabled = studio.classes.isNotEmpty(), onClick = {
-                                toolsMenu = false
-                                studio.auditData()
-                            })
-                            DropdownMenuItem(text = { Text("✂ Toplu kırpma (hazır fotoğraflar)") }, onClick = {
-                                toolsMenu = false
-                                studio.navigate(Screen.Batch)
-                            })
+                }
+
+                if (studio.settings.rootUri == null || !studio.hasRootAccess()) {
+                    Card(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(
+                                if (studio.settings.rootUri == null) "Kayıt klasörü seçilmedi" else "Kayıt klasörü izni kaybolmuş",
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Fotoğraflar seçeceğiniz klasörün altında sınıf klasörlerine kaydedilir.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Spacer(Modifier.size(6.dp))
+                            Button(onClick = { rootPicker.launch(null) }) { Text("📂 Klasör seç") }
                         }
                     }
-                    SettingsBtn(onClick = { studio.navigate(Screen.Settings) }, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
-            }
 
-            if (studio.settings.rootUri == null || !studio.hasRootAccess()) {
-                Card(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-                ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(
-                            if (studio.settings.rootUri == null) "Kayıt klasörü seçilmedi" else "Kayıt klasörü izni kaybolmuş",
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Fotoğraflar seçeceğiniz klasörün altında sınıf klasörlerine kaydedilir.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                if (studio.classes.isNotEmpty()) SummaryCard(studio)
+
+                if (studio.classes.isEmpty()) {
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().padding(24.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Henüz sınıf yok", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.size(6.dp))
-                        Button(onClick = { rootPicker.launch(null) }) { Text("📂 Klasör seç") }
-                    }
-                }
-            }
-
-            if (studio.classes.isNotEmpty()) SummaryCard(studio)
-
-            if (studio.classes.isEmpty()) {
-                Column(
-                    Modifier.weight(1f).fillMaxWidth().padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("Henüz sınıf yok", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.size(6.dp))
-                    Text(
-                        "Sınıf ekleyin, ardından e-Okul veya Excel’den kopyaladığınız numara + ad soyad listesini yapıştırın.",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.size(12.dp))
-                    Button(onClick = { newClassOpen = true }) { Text("＋ İlk sınıfı ekle") }
-                }
-            } else {
-                LazyColumn(
-                    Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 12.dp, end = 12.dp, top = 8.dp, bottom = 112.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(studio.classes, key = { it.id }) { c ->
-                        ClassCard(
-                            c,
-                            onOpen = { studio.navigate(Screen.ClassDetail(c.id)) },
-                            onRename = { renameId = c.id },
-                            onDelete = { deleteId = c.id }
+                        Text(
+                            "Sınıf ekleyin, ardından e-Okul veya Excel’den kopyaladığınız numara + ad soyad listesini yapıştırın.",
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(Modifier.size(12.dp))
+                        Button(onClick = { newClassOpen = true }, colors = ButtonDefaults.buttonColors(containerColor = softColors().container, contentColor = softColors().onContainer)) { Text("＋ İlk sınıfı ekle") }
+                    }
+                } else {
+                    LazyColumn(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            start = 12.dp, end = 12.dp, top = 8.dp, bottom = 112.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(studio.classes, key = { it.id }) { c ->
+                            ClassCard(
+                                c,
+                                onOpen = { studio.navigate(Screen.ClassDetail(c.id)) },
+                                onRename = { renameId = c.id },
+                                onDelete = { deleteId = c.id }
+                            )
+                        }
                     }
                 }
+                Text(
+                    "Copyright © 2026 Hacimd. All rights reserved.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
-            Text(
-                "Copyright © 2026 Hacimd. All rights reserved.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
-        if (studio.classes.isNotEmpty()) {
-            ExtendedFloatingActionButton(
-                onClick = { newClassOpen = true },
-                // Alttaki telif yazısının (≈28 dp) üstünde kalsın
-                modifier = Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 44.dp)
-            ) { Text("＋ Sınıf ekle") }
+            if (studio.classes.isNotEmpty()) {
+                ExtendedFloatingActionButton(
+                    onClick = { newClassOpen = true },
+                    // Alttaki telif yazısının (≈28 dp) üstünde kalsın
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 44.dp),
+                    containerColor = softColors().container,
+                    contentColor = softColors().onContainer,
+                    elevation = androidx.compose.material3.FloatingActionButtonDefaults.elevation(2.dp, 2.dp, 2.dp, 2.dp)
+                ) { Text("＋ Sınıf ekle", fontWeight = FontWeight.SemiBold) }
+            }
         }
     }
 
@@ -259,6 +267,7 @@ fun HomeScreen(studio: StudioViewModel) {
     }
 }
 
+/** İnce özet şeridi: kutu yok; çekilen/toplam, yüzde, ilerleme çizgisi ve tek satır bilgi. */
 @Composable
 private fun SummaryCard(studio: StudioViewModel) {
     val classes = studio.classes
@@ -267,33 +276,49 @@ private fun SummaryCard(studio: StudioViewModel) {
     val missing = total - done
     val retake = classes.sumOf { c -> c.students.count { it.retake } }
     val last = studio.settings.lastBackupMs
-    val backupText = if (last == 0L) "Yedek: hiç alınmadı"
-    else "Yedek: " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
+    val backupText = if (last == 0L) "Yedek yok"
+    else "Yedek " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
     val stale = done > 0 && (last == 0L || System.currentTimeMillis() - last > 7L * 24 * 3600 * 1000)
-    Card(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    val frac = if (total == 0) 0f else done.toFloat() / total
+    val soft = softColors()
+    val fg = soft.onContainer
+    // Pastel dolgulu blok: sınıf kartlarından (beyaz) ayrı, genel bir özet olduğu hemen anlaşılır.
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(soft.container)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                "${classes.size} sınıf · $total öğrenci",
-                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold
+                androidx.compose.ui.text.buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp)) { append("$done") }
+                    withStyle(SpanStyle(color = soft.onContainerMuted)) { append(" / $total çekildi") }
+                },
+                color = fg,
+                modifier = Modifier.weight(1f)
             )
-            Text(
-                "✅ $done çekildi   ⏳ $missing eksik" + if (retake > 0) "   🔁 $retake tekrar" else "",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                backupText + if (stale) " — yedek almanız önerilir" else "",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (stale) Color(0xFFE08A00) else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("%${(frac * 100).toInt()}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = fg)
         }
+        Spacer(Modifier.size(8.dp))
+        LinearProgressIndicator(
+            progress = { frac },
+            color = soft.bar,
+            trackColor = soft.barTrack,
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
+        )
+        Spacer(Modifier.size(8.dp))
+        Text(
+            "${classes.size} sınıf · $missing eksik" + (if (retake > 0) " · $retake tekrar" else "") +
+                " · $backupText" + (if (stale) " (yedek önerilir)" else ""),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (stale) soft.warnText else soft.onContainerMuted
+        )
     }
 }
 
-private val DoneGreen = Color(0xFF3C9A5F)
-private val WarnOrange = Color(0xFFE08A00)
+private val DoneGreen = StatusColors.Done
+private val WarnOrange = StatusColors.Warn
 
 @Composable
 private fun ClassCard(
@@ -346,7 +371,7 @@ private fun ClassCard(
             LinearProgressIndicator(
                 progress = { if (total == 0) 0f else done.toFloat() / total },
                 color = barColor,
-                modifier = Modifier.fillMaxWidth().padding(end = 14.dp)
+                modifier = Modifier.fillMaxWidth().padding(end = 14.dp).height(6.dp).clip(CircleShape)
             )
         }
     }
@@ -378,5 +403,85 @@ fun NameDialog(
         },
         confirmButton = { TextButton(onClick = { error = onConfirm(text) }) { Text(confirmText) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç") } }
+    )
+}
+
+
+/** Ana menü (çekmece): gruplanmış, simgeli, 52 dp satırlı; pastel başlık. Satırlar işlemi doğrudan başlatır. */
+@Composable
+private fun HomeDrawer(studio: StudioViewModel, closeThen: (() -> Unit) -> Unit, startRestore: () -> Unit) {
+    val soft = softColors()
+    val hasClasses = studio.classes.isNotEmpty()
+    val total = studio.classes.sumOf { it.students.size }
+    val done = studio.classes.sumOf { it.capturedCount }
+    val last = studio.settings.lastBackupMs
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val version = remember {
+        try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
+    }
+    val backupText = if (last == 0L) "Yedek yok"
+    else "Yedek " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
+    androidx.compose.material3.ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+            Column(
+                Modifier.fillMaxWidth().background(soft.container)
+                    .windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 20.dp, vertical = 18.dp)
+            ) {
+                Text("E-Okul Foto Studio", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = soft.onContainer)
+                Spacer(Modifier.size(4.dp))
+                Text(
+                    (if (total > 0) "$done / $total çekildi · " else "") + backupText + (if (version.isNotBlank()) " · v$version" else ""),
+                    style = MaterialTheme.typography.bodySmall, color = soft.onContainerMuted
+                )
+            }
+            Spacer(Modifier.size(8.dp))
+            DrawerItem("Ana sayfa", Icons.Filled.Home, selected = true, enabled = true) { closeThen {} }
+            DrawerItem("Çoklu sınıf listesi (Excel)", Icons.AutoMirrored.Filled.List) { closeThen { studio.navigate(Screen.MultiImport) } }
+            DrawerItem("Toplu kırpma", Icons.Filled.Edit) { closeThen { studio.navigate(Screen.Batch) } }
+            DrawerGroup("Yedek ve veri")
+            DrawerItem("Yedekle", Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring) { closeThen { studio.backup() } }
+            DrawerItem("Yedekten geri yükle", Icons.Filled.Refresh, enabled = !studio.isRestoring) { closeThen { startRestore() } }
+            DrawerItem("Tüm sınıflar ZIP (klasörlü + rapor)", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportAllFoldersZip() } }
+            DrawerItem("Sınıfları PDF olarak aktar", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportClassesPdf() } }
+            DrawerItem("Eksik klasör dosyalarını onar", Icons.Filled.Build, enabled = hasClasses) { closeThen { studio.repairFolderFiles() } }
+            DrawerItem("Veri denetimi", Icons.Filled.Search, enabled = hasClasses) { closeThen { studio.auditData() } }
+            DrawerGroup("Uygulama")
+            DrawerItem("Ayarlar", Icons.Filled.Settings) { closeThen { studio.navigate(Screen.Settings) } }
+            Spacer(Modifier.size(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun DrawerGroup(title: String) {
+    Text(
+        title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 28.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun DrawerItem(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val soft = softColors()
+    androidx.compose.material3.NavigationDrawerItem(
+        label = { Text(label, maxLines = 2) },
+        icon = { androidx.compose.material3.Icon(icon, contentDescription = null) },
+        selected = selected,
+        onClick = { if (enabled) onClick() },
+        colors = androidx.compose.material3.NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = soft.container,
+            selectedTextColor = soft.onContainer,
+            selectedIconColor = soft.onContainer
+        ),
+        modifier = Modifier
+            .padding(androidx.compose.material3.NavigationDrawerItemDefaults.ItemPadding)
+            .defaultMinSize(minHeight = 52.dp)
+            .alpha(if (enabled) 1f else 0.4f)
     )
 }

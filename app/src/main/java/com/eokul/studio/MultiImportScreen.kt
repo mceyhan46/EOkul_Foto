@@ -40,8 +40,8 @@ import com.eokul.studio.core.FlatList
 import com.eokul.studio.core.RosterParser
 import com.eokul.studio.core.SheetReader
 
-private val OkGreen = androidx.compose.ui.graphics.Color(0xFF3C9A5F)
-private val WarnAmber = androidx.compose.ui.graphics.Color(0xFFE08A00)
+private val OkGreen = StatusColors.Done
+private val WarnAmber = StatusColors.Warn
 
 /**
  * Çok şubeli e-Okul dosyasından (6A, 6B, 6C… alt alta) tek seferde birden çok sınıf ekler.
