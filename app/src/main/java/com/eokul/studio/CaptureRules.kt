@@ -39,3 +39,35 @@ object CaptureRules {
             cls.copy(students = cls.students.map { st -> pending[key(cls.id, st.no)] ?: st })
         }
 }
+
+/** Çekim sonrası saf kurallar: orijinal dosya uzantısı/boyut kararı ve sınıf bitiş özeti. */
+object SaveRules {
+    const val ORIG_MAX_SIDE = 1600
+    const val ORIG_MAX_BYTES = 900_000
+
+    fun originalExt(mime: String): String = when (mime) {
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "image/heic", "image/heif" -> "heic"
+        else -> "jpg"
+    }
+
+    /** Orijinal çok büyükse JPEG olarak küçültülüp saklanır. */
+    fun needsCompaction(bytes: Int): Boolean = bytes > ORIG_MAX_BYTES
+
+    /** Uzun kenarı [ORIG_MAX_SIDE]'a indirecek ölçek (1.0 = küçültme yok). */
+    fun originalScale(w: Int, h: Int): Double = minOf(1.0, ORIG_MAX_SIDE.toDouble() / maxOf(w, h))
+
+    /** Sınıf bitince kısa özet: kaç fotoğraf, kalite ortalaması, düşük puanlılar. */
+    fun classSummary(cls: SchoolClass?): String {
+        if (cls == null) return "🎉 Sınıftaki tüm fotoğraflar çekildi"
+        val total = cls.students.size
+        val scored = cls.students.filter { it.captured && it.score >= 0 }
+        val low = cls.students.count { it.captured && it.score in 0 until 70 }
+        val sb = StringBuilder("🎉 ${cls.name}: $total/$total fotoğraf çekildi")
+        if (scored.isNotEmpty()) sb.append("\nKalite ortalaması ${scored.map { it.score }.average().toInt()}")
+        if (low > 0) sb.append("\n⚠ $low düşük puanlı fotoğraf var; sınıf ekranında \"⚠ Düşük\" çipinden bakıp yeniden çekebilirsiniz.")
+        else if (scored.isNotEmpty()) sb.append("\nDüşük puanlı fotoğraf yok.")
+        return sb.toString()
+    }
+}

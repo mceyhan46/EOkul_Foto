@@ -1107,7 +1107,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ------------------------------------------------------------------ kaydetme
-    private class Saved(val origUri: String?, val stem: String, val warnings: List<String> = emptyList())
+        private val photoSaver by lazy { PhotoSaver(ctx) }
 
     fun saveCapture() {
         if (isRestoring) {
@@ -1154,7 +1154,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             saveMutex.withLock {
                 val tSave = android.os.SystemClock.elapsedRealtime()
                 try {
-                    val saved = withContext(Dispatchers.IO) { writeAll(root, cls, st, cap, px, iw, ih, box, set) }
+                    val saved = withContext(Dispatchers.IO) { photoSaver.save(root, cls, st, cap.source, cap.fromSaved, px, iw, ih, box, set) }
                     Ops.log("save", "id", oid, "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tSave, "warn", saved.warnings.size)
                     pendingCaptureOriginals.remove(captureKey(cap.classId, cap.no))
                     updateStudent(cap.classId, cap.no) {
@@ -1179,19 +1179,6 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Sınıf bitince kısa özet: kaç fotoğraf, kalite ortalaması, düşük puanlılar. */
-    private fun classSummary(cls: SchoolClass?): String {
-        if (cls == null) return "🎉 Sınıftaki tüm fotoğraflar çekildi"
-        val total = cls.students.size
-        val scored = cls.students.filter { it.captured && it.score >= 0 }
-        val low = cls.students.count { it.captured && it.score in 0 until 70 }
-        val sb = StringBuilder("🎉 ${cls.name}: $total/$total fotoğraf çekildi")
-        if (scored.isNotEmpty()) sb.append("\nKalite ortalaması ${scored.map { it.score }.average().toInt()}")
-        if (low > 0) sb.append("\n⚠ $low düşük puanlı fotoğraf var; sınıf ekranında \"⚠ Düşük\" çipinden bakıp yeniden çekebilirsiniz.")
-        else if (scored.isNotEmpty()) sb.append("\nDüşük puanlı fotoğraf yok.")
-        return sb.toString()
-    }
-
     private fun afterSave(classId: String, no: String, set: Settings) {
         if (screen == Screen.Review) back()
         val top = screen
@@ -1202,136 +1189,13 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 replace(Screen.Camera(classId, next))
             } else {
                 back()
-                say(if (set.serialMode) classSummary(cls) else "✓ Kaydedildi")
+                say(if (set.serialMode) SaveRules.classSummary(cls) else "✓ Kaydedildi")
             }
         } else {
             say("✓ Kaydedildi")
         }
     }
 
-    private fun writePrivatePhotoAtomically(target: File, bytes: ByteArray) {
-        target.parentFile?.mkdirs()
-        val token = java.util.UUID.randomUUID().toString().replace("-", "")
-        val tmp = File(target.parentFile, ".${target.name}.$token.tmp")
-        val old = File(target.parentFile, ".${target.name}.$token.old")
-        try {
-            java.io.FileOutputStream(tmp).use { out ->
-                out.write(bytes)
-                out.flush()
-                out.fd.sync()
-            }
-            if (tmp.length() != bytes.size.toLong()) throw IOException("Geçici fotoğraf eksik yazıldı")
-            if (target.exists() && !target.renameTo(old)) {
-                throw IOException("Eski uygulama içi fotoğraf korunamadı; mevcut dosya değiştirilmedi")
-            }
-            try {
-                try {
-                    java.nio.file.Files.move(
-                        tmp.toPath(), target.toPath(),
-                        java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                    )
-                } catch (_: Exception) {
-                    java.nio.file.Files.move(tmp.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-                }
-                if (target.length() != bytes.size.toLong()) throw IOException("Kaydedilen fotoğraf doğrulanamadı")
-                val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                android.graphics.BitmapFactory.decodeFile(target.path, options)
-                if (options.outWidth != TARGET_W || options.outHeight != TARGET_H) {
-                    throw IOException("Kaydedilen küçük fotoğrafın boyutu geçersiz")
-                }
-                old.delete()
-            } catch (e: Exception) {
-                target.delete()
-                if (old.exists() && !old.renameTo(target)) {
-                    throw IOException("Yeni fotoğraf kaydedilemedi; eski fotoğraf .old dosyasında korundu", e)
-                }
-                throw e
-            }
-        } finally {
-            tmp.delete()
-        }
-    }
-
-    private fun compactOriginal(px: IntArray, w: Int, h: Int): ByteArray {
-        val k = minOf(1.0, ORIG_MAX_SIDE.toDouble() / maxOf(w, h))
-        val ow = maxOf(1, Math.round(w * k).toInt())
-        val oh = maxOf(1, Math.round(h * k).toInt())
-        // Arşiv kopyası: yerel (native) ölçekleme + JPEG, Java Lanczos'tan çok daha hızlı
-        val full = android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
-        val bmp = if (k < 1.0) android.graphics.Bitmap.createScaledBitmap(full, ow, oh, true) else full
-        if (bmp !== full) full.recycle()
-        val bos = java.io.ByteArrayOutputStream()
-        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, bos)
-        bmp.recycle()
-        return bos.toByteArray()
-    }
-
-    private fun writeAll(
-        root: Uri, cls: SchoolClass, st: Student, cap: CaptureState, px: IntArray,
-        iw: Int, ih: Int, box: Box, set: Settings
-    ): Saved {
-        val stem = RosterParser.studentStem(st.no, st.name)
-        val clsDir = RosterParser.sanitizeFileName(cls.name)
-        val jpeg = ImageOps.render(ctx, px, iw, ih, box, set)
-        run {   // Kaydetmeden önce çıktıyı doğrula: gerçekten 133x171 JPEG olarak açılıyor mu?
-            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, o)
-            if (o.outWidth != TARGET_W || o.outHeight != TARGET_H) throw IOException("Çıktı doğrulanamadı (${o.outWidth}x${o.outHeight})")
-        }
-
-        val mainUri = Output.writePath(ctx, root, listOf(clsDir), "$stem.jpg", "image/jpeg", jpeg)
-        // Yazım sonrası doğrulama: dosya klasörde gerçekten duruyor ve beklenen boyutta mı? (Sessiz silinme/kaybolma hatalarına karşı.)
-        if (!Output.exists(ctx, mainUri)) throw IOException("Fotoğraf yazıldı ancak klasörde bulunamadı: $stem.jpg")
-
-        // Ana çıktı (kayıt klasöründeki 133x171 JPEG) güvenle yazıldı. Bundan sonraki adımlar başarısız olursa
-        // kayıt iptal edilmez; kullanıcıya açık bir uyarı verilir (ana fotoğraf zaten teslim edilmiş durumda).
-        val warnings = ArrayList<String>()
-        var origUri = st.origUri
-        if (cap.fromSaved || !set.keepOriginals) Ops.log("orig", "ok", false, "err", if (cap.fromSaved) "skipped:fromSaved" else "skipped:keepOriginalsOff")
-        if (!cap.fromSaved && set.keepOriginals) try {
-            var bytes = ctx.contentResolver.openInputStream(cap.source)?.use { it.readBytes() }
-                ?: throw IOException("Orijinal okunamadı")
-            var mime = ctx.contentResolver.getType(cap.source) ?: "image/jpeg"
-            var ext = when (mime) {
-                "image/png" -> "png"
-                "image/webp" -> "webp"
-                "image/heic", "image/heif" -> "heic"
-                else -> "jpg"
-            }
-            // Orijinal kopya kompakt tutulur: uzun kenar en fazla 1600 px, JPEG %85 (~300-500 KB).
-            if (bytes.size > ORIG_MAX_BYTES) {
-                bytes = compactOriginal(px, iw, ih)
-                mime = "image/jpeg"
-                ext = "jpg"
-            }
-            val newUri = Output.writePath(ctx, root, listOf(clsDir, ORIGINALS_DIR), "$stem.$ext", mime, bytes)
-            if (!Output.exists(ctx, newUri)) throw IOException("Orijinal yazıldı ancak klasörde bulunamadı")
-            val old = st.origUri
-            if (old != null && old != newUri.toString()) Output.deleteUri(ctx, Uri.parse(old))
-            origUri = newUri.toString()
-            Ops.log("orig", "ok", true, "bytes", bytes.size, "ext", ext)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            // Ana fotoğraf zaten yazıldı; orijinal başarısızsa kayıt geri alınmaz, uyarı verilir ve günlüğe yazılır.
-            Ops.log("orig", "ok", false, "err", (e.toString()).take(200))
-            warnings.add("orijinal fotoğraf saklanamadı (${e.message ?: e.javaClass.simpleName})")
-        }
-
-        val oldStem = st.savedStem
-        if (oldStem != null && oldStem != stem) {
-            Output.deletePath(ctx, root, listOf(clsDir), "$oldStem.jpg")
-        }
-
-        try {
-            val priv = Naming.privatePhoto(ctx, cls.id, st.no)
-            writePrivatePhotoAtomically(priv, jpeg)
-        } catch (e: Exception) {
-            warnings.add("uygulama içi kopya güvenli biçimde yazılamadı; küçük resim ve ZIP için yeniden çekin (${e.message ?: "hata"})")
-        }
-        return Saved(origUri, stem, warnings)
-    }
 }
 
 /** Kayıt klasöründe tutulan en yeni "geri yükleme öncesi" güvenlik yedeği sayısı; eskileri otomatik silinir. */
@@ -1339,7 +1203,5 @@ private const val KEEP_SAFETY_BACKUPS = 2
 
 /** Yedek dosyalarının durduğu alt klasör (kayıt klasörünün içinde). */
 private val BACKUP_DIR = listOf(com.eokul.studio.core.BackupNames.FOLDER)
-private const val ORIG_MAX_SIDE = 1600
-private const val ORIG_MAX_BYTES = 900_000
 
 
