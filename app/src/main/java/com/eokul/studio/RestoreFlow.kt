@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun rememberRestoreFlow(studio: StudioViewModel): () -> Unit {
     var confirmRestore by remember { mutableStateOf<Uri?>(null) }
-    var restoreInfo by remember { mutableStateOf<StudioViewModel.BackupInfo?>(null) }
+    var restoreInfo by remember { mutableStateOf<BackupInfo?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) scope.launch {
