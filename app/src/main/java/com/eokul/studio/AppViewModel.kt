@@ -169,16 +169,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ yükleme
     private fun startLoad(sources: List<Pair<String, Uri>>, key: String, useSaved: Boolean) {
-        loadJob?.cancel()
         val st = storeKey(key)
         store = st
+        beginLoad(uniqueNames(sources), st, useSaved, "Yükleniyor") { total, failed -> BatchRules.loadDone(total, failed) }
+    }
+
+    /** Aynı kayıt deposuyla yeniden yükler (yeniden kırpma / sıfırlama). */
+    private fun startLoadKeepStore(sources: List<Pair<String, Uri>>) {
+        val st = store ?: return
+        beginLoad(sources, st, true, "Yeniden kırpılıyor") { total, failed -> BatchRules.recropDone(total - failed) }
+    }
+
+    private fun beginLoad(
+        sources: List<Pair<String, Uri>>, st: CropStore, useSaved: Boolean, label: String,
+        doneStatus: (total: Int, failed: Int) -> String
+    ) {
+        loadJob?.cancel()
         undo.clear()
         items.clear()
-        items.addAll(uniqueNames(sources).map { (n, u) -> PhotoItem(n, u) })
+        items.addAll(sources.map { (n, u) -> PhotoItem(n, u) })
         loadDone = 0
         loadTotal = items.size
         loading = true
-        status = "⏳ Yükleniyor… 0/${items.size}"
+        status = BatchRules.progress(label, 0, items.size)
         val names = items.map { it.name }
         val s = settings
 
@@ -188,47 +201,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             coroutineScope {
                 for (n in names) {
                     launch(Dispatchers.Default) {
-                        sem.withPermit { processOne(n, saved[n], s) }
+                        sem.withPermit { processOne(n, saved[n], s, label) }
                     }
                 }
             }
             loading = false
-            val failed = items.count { it.error != null }
-            status = "✅ ${items.size - failed} fotoğraf hazır" + if (failed > 0) "  ·  ⚠ $failed okunamadı" else ""
+            status = doneStatus(items.size, items.count { it.error != null })
             persistNow()
         }
     }
 
-    private suspend fun processOne(name: String, rec: CropStore.Rec?, s: Settings) {
+    private suspend fun processOne(name: String, rec: CropStore.Rec?, s: Settings, label: String) {
         val item = withContext(Dispatchers.Main) { items.firstOrNull { it.name == name } } ?: return
         val result: PhotoItem = try {
             val bmp = ImageOps.decode(appCtx, item.uri)
             val w = bmp.width
             val h = bmp.height
             val px = ImageOps.pixels(bmp)
-            val box: Box
-            val faceFound: Boolean
-            val faceCount: Int
-            val edited: Boolean
-            val skipped: Boolean
-            if (rec != null && rec.w == w && rec.h == h) {
-                box = rec.box.fitInside(w, h)
-                faceFound = rec.face
-                faceCount = rec.faceCount
-                edited = rec.edited
-                skipped = rec.skipped
-            } else {
-                val faces = ImageOps.detectFaces(bmp, px)
-                box = ImageOps.defaultBox(w, h, faces.firstOrNull(), s)
-                faceFound = faces.isNotEmpty()
-                faceCount = faces.size
-                edited = false
-                skipped = false
+            val a = BatchRules.fromRecord(rec, w, h) ?: ImageOps.detectFaces(bmp, px).let { faces ->
+                BatchRules.Analysis(ImageOps.defaultBox(w, h, faces.firstOrNull(), s), faces.isNotEmpty(), faces.size, edited = false, skipped = false)
             }
+            val box = a.box
             bmp.recycle()
             item.copy(
-                width = w, height = h, box = box, faceFound = faceFound, faceCount = faceCount,
-                edited = edited, skipped = skipped, thumb = ImageOps.thumb(px, w, h, box),
+                width = w, height = h, box = box, faceFound = a.faceFound, faceCount = a.faceCount,
+                edited = a.edited, skipped = a.skipped, thumb = ImageOps.thumb(px, w, h, box),
                 error = null, ready = true
             )
         } catch (e: CancellationException) {
@@ -239,7 +236,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.Main) {
             replaceItem(result)
             loadDone++
-            status = "⏳ Yükleniyor… $loadDone/$loadTotal"
+            status = BatchRules.progress(label, loadDone, loadTotal)
         }
     }
 
@@ -258,34 +255,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 storeMutex.withLock { store?.dropUnedited() }
             }
             startLoadKeepStore(sources)
-        }
-    }
-
-    private fun startLoadKeepStore(sources: List<Pair<String, Uri>>) {
-        val st = store ?: return
-        loadJob?.cancel()
-        undo.clear()
-        items.clear()
-        items.addAll(sources.map { (n, u) -> PhotoItem(n, u) })
-        loadDone = 0
-        loadTotal = items.size
-        loading = true
-        status = "⏳ Yeniden kırpılıyor… 0/${items.size}"
-        val names = items.map { it.name }
-        val s = settings
-        loadJob = viewModelScope.launch {
-            val saved = withContext(Dispatchers.IO) { st.load() }
-            val sem = Semaphore(2)
-            coroutineScope {
-                for (n in names) {
-                    launch(Dispatchers.Default) {
-                        sem.withPermit { processOne(n, saved[n], s) }
-                    }
-                }
-            }
-            loading = false
-            status = "✅ ${items.count { it.error == null }} fotoğraf yeniden kırpıldı"
-            persistNow()
         }
     }
 
@@ -318,8 +287,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ geri al
     private fun pushUndo(label: String, old: PhotoItem) {
-        undo.add(UndoEntry(label, old.name, old))
-        if (undo.size > MAX_UNDO) undo.removeAt(0)
+        BatchRules.pushCapped(undo, UndoEntry(label, old.name, old), MAX_UNDO)
     }
 
     fun undoLast() {
@@ -545,7 +513,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         saving = true
         saveDone = 0
         saveTotal = jobs.size
-        status = "💾 Kaydediliyor… 0/${jobs.size}"
+        status = BatchRules.saveProgress(0, jobs.size)
 
         saveJob = viewModelScope.launch {
             var ok = 0
@@ -587,7 +555,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         }
                         saveDone++
-                        status = "💾 Kaydediliyor… $saveDone/$saveTotal"
+                        status = BatchRules.saveProgress(saveDone, saveTotal)
                     }
                 }
             } catch (e: CancellationException) {
@@ -595,20 +563,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             saving = false
             val where = Output.locationLabel(tree, sourceLabel, s.outputDir)
-            when {
-                cancelled -> {
-                    status = "⏹ İptal edildi — $ok kaydedildi"
-                    say("⏹ İptal edildi — $ok fotoğraf kaydedildi")
-                }
-                fails.isNotEmpty() -> {
-                    status = "⚠ $ok başarılı, ${fails.size} hatalı"
-                    failures = fails
-                }
-                else -> {
-                    status = "✅ $ok fotoğraf kaydedildi → $where"
-                    say("✓ $ok fotoğraf kaydedildi → $where")
-                }
-            }
+            val outcome = BatchRules.saveOutcome(ok, fails, cancelled, where)
+            status = outcome.status
+            outcome.toast?.let { say(it) }
+            if (outcome.failures.isNotEmpty()) failures = outcome.failures
         }
     }
 
