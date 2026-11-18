@@ -7,7 +7,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -45,10 +44,6 @@ fun CloseBtn(onClick: () -> Unit, tint: Color = Color.White) =
 @Composable
 fun MoreBtn(onClick: () -> Unit, tint: Color = LocalContentColor.current) =
     IconBtn(Icons.Filled.MoreVert, "Diğer işlemler", onClick, tint = tint)
-
-@Composable
-fun SettingsBtn(onClick: () -> Unit, tint: Color = LocalContentColor.current) =
-    IconBtn(Icons.Filled.Settings, "Ayarlar", onClick, tint = tint)
 
 @Composable
 fun PrevBtn(onClick: () -> Unit, enabled: Boolean, tint: Color = Color.White) =

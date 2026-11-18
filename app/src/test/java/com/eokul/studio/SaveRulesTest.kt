@@ -42,7 +42,7 @@ class SaveRulesTest {
         assertArrayEquals(byteArrayOf(1, 2, 3), t.readBytes())
         AtomicPhoto.write(t, byteArrayOf(9, 9))
         assertArrayEquals(byteArrayOf(9, 9), t.readBytes())
-        assertEquals(listOf("1.jpg"), t.parentFile.list()!!.toList())   // artık geçici/.old dosya yok
+        assertEquals(listOf("1.jpg"), t.parentFile!!.list()!!.toList())   // artık geçici/.old dosya yok
     }
 
     @Test fun atomikYazim_dogrulamaBasarisizsaEskiDosyaGeriGelir() {
@@ -55,7 +55,7 @@ class SaveRulesTest {
             assertEquals("boyut yanlış", e.message)
         }
         assertArrayEquals(byteArrayOf(1), t.readBytes())
-        assertEquals(listOf("2.jpg"), t.parentFile.list()!!.toList())
+        assertEquals(listOf("2.jpg"), t.parentFile!!.list()!!.toList())
     }
 
     @Test fun atomikYazim_dogrulamaBasarisizVeEskiYoksa_hedefOlusmaz() {
