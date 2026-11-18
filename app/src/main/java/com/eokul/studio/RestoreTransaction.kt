@@ -1,6 +1,5 @@
 package com.eokul.studio
 
-import android.content.Context
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -21,8 +20,7 @@ object RestoreTransaction {
     private const val STATE_COMMITTED = "COMMITTED"
 
     @Throws(IOException::class)
-    fun commit(context: Context, store: RosterStore, stagedPhotos: File, stagedRoster: File) {
-        val base = context.filesDir
+    fun commit(base: File, store: RosterStore, stagedPhotos: File, stagedRoster: File) {
         val photos = File(base, "photos")
         val oldPhotos = File(base, OLD_PHOTOS)
         val oldRoster = File(base, OLD_ROSTER)
@@ -61,7 +59,7 @@ object RestoreTransaction {
             cleanup(base)
         } catch (e: Exception) {
             try {
-                recover(context)
+                recover(base)
             } catch (recovery: Exception) {
                 throw IOException(
                     "Geri yükleme başarısız: ${e.message}. Otomatik geri alma da tamamlanamadı: ${recovery.message}. " +
@@ -74,8 +72,7 @@ object RestoreTransaction {
 
     /** Uygulama açılışında çağrılır. PREPARED işlem varsa eski veri geri alınır. */
     @Throws(IOException::class)
-    fun recover(context: Context) {
-        val base = context.filesDir
+    fun recover(base: File) {
         val journal = File(base, JOURNAL)
         if (!journal.exists()) return
         val props = Properties()

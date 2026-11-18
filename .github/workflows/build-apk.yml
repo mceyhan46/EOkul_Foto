@@ -78,6 +78,23 @@ jobs:
       - name: Birim testleri
         run: gradle testDebugUnitTest --no-daemon --stacktrace --console=plain
 
+      - name: Test özeti
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          t = f = e = s = 0
+          rows = []
+          for p in sorted(glob.glob("app/build/test-results/testDebugUnitTest/*.xml")):
+              r = ET.parse(p).getroot()
+              n, fl, er, sk = (int(r.get(k, 0)) for k in ("tests", "failures", "errors", "skipped"))
+              t += n; f += fl; e += er; s += sk
+              rows.append(f"{r.get('name')}: {n}" + (f" (hata {fl+er})" if fl + er else ""))
+          print("\n".join(rows))
+          print(f"TOPLAM: {t} test, {f} başarısız, {e} hata, {s} atlandı")
+          PY
+
       - name: Debug APK derle
         shell: bash
         run: |

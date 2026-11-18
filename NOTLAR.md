@@ -202,3 +202,23 @@ core/CrossClass.java (+CrossClassTest, 130 test). Engellemez: ogrenci ekle/numar
 - Yedekler kayıt klasörü/Yedek altına, `Ydk_ggaayy_ssdd.zip` adıyla yazılır; önek Ayarlar'dan değiştirilir (`BackupNames`). Güvenlik yedeği `Onc_…`, rapor `Rpr_…`. Eski adlı güvenlik yedekleri de temizlikte tanınır.
 - "Kırpmayı düzenle": yüz bulunursa kutu güncel ayarlara göre göz ortasına hizalı yeniden hesaplanır; yüz yoksa kayıtlı kutu.
 - PDF: kayıt klasörü/PDF/Foto_ggaayy_ssdd.pdf; 7 sütun, sınıf başına yeni sayfa (`PdfGrid`, `ClassPdf`).
+
+## Mimari (refactor-core)
+Katmanlar (bağımlılık yönü aşağıya doğru):
+1. `core/*.java` — saf Java çekirdek (kırpma, yüz merkezi, ortalama kontrolü, yedek ZIP, yol güvenliği, ad biçimi, PDF düzeni, günlük). Android'e bağlı değil; JUnit ile test edilir.
+2. Android'siz Kotlin servisleri — `CaptureRules` (kayıt kuralları), `BackupService` (yedek/inceleme/geri yükleme/temizlik), `RosterStore` (liste kaydı), `RestoreTransaction`. Dosya erişimi arayüzle (`BackupStorage`) verilir; testler gerçek geçici klasörlerde koşar.
+3. Android uyarlayıcıları — `SafBackupStorage`, `Output` (SAF), `ClassPdf` (PdfDocument), kamera/ML Kit (`ImageOps`).
+4. `StudioViewModel` — yalnızca durumu (liste, ekran yığını, kilitler) tutar ve servisleri sırayla çağırır; iş kuralı içermemeli.
+5. Ekranlar (Compose) — yalnızca ViewModel'e bakar. Renkler `AppColors.kt`.
+Kural: yeni iş mantığı önce 1. ya da 2. katmanda test edilerek yazılır; ViewModel'e kural eklenmez.
+
+### Ayrıştırma durumu (1.1.43)
+`StudioViewModel` 1530 → ~1150 satır; iş kuralları şu dosyalara taşındı (hepsinin Kotlin/JUnit testi var):
+- `ExportService` — ZIP planı (yinelenen numara), `rapor.csv` (BOM, `;`, kaçış), ZIP yazımı.
+- `DataAudit` — veri denetimi raporu, klasör denetimi satırları, eksik dosya onarım listesi.
+- `RosterRules` — sınıf/öğrenci ekleme, yeniden adlandırma, numara değiştirme, liste ve şube içe aktarma, çapraz sınıf uyarısı.
+- `SaveRules` + `AtomicPhoto` — orijinal uzantısı/küçültme kararı, sınıf bitiş özeti, uygulama içi kopyanın atomik yazımı (hata → eski dosya geri gelir).
+- `InitialBox` — "Kırpmayı düzenle"de başlangıç kutusu seçimi (yüz varsa varsayılan, yoksa kayıtlı kutu, boyut ölçekleme).
+- `PinLock` — yanlış PIN bekleme süresi (kalıcı sayaç) ve arka plan kilit kararı.
+Android uyarlayıcıları (testsiz, ince): `PhotoSaver` (SAF yazım sırası), `FolderService` (klasör/dosya silme-adlandırma), `SafBackupStorage`.
+ViewModel'de kalanlar: durum, ekran yığını, mutex/sürüm kontrollü kayıt, kamera/inceleme akışı koordinasyonu, ileti gösterimi.

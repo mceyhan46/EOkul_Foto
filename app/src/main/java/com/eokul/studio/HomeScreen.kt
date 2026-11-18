@@ -434,17 +434,17 @@ private fun HomeDrawer(studio: StudioViewModel, closeThen: (() -> Unit) -> Unit,
                     style = MaterialTheme.typography.bodySmall, color = soft.onContainerMuted
                 )
             }
-            Spacer(Modifier.size(8.dp))
-            DrawerItem("Ana sayfa", Icons.Filled.Home, selected = true, enabled = true) { closeThen {} }
-            DrawerItem("Çoklu sınıf listesi (Excel)", Icons.AutoMirrored.Filled.List) { closeThen { studio.navigate(Screen.MultiImport) } }
-            DrawerItem("Toplu kırpma", Icons.Filled.Edit) { closeThen { studio.navigate(Screen.Batch) } }
-            DrawerGroup("Yedek ve veri")
+            DrawerGroup("Sınıflar")
+            DrawerItem("Ana Sayfa", Icons.Filled.Home, selected = true, enabled = true) { closeThen {} }
+            DrawerItem("Çoklu Sınıf Listesi (Excel)", Icons.AutoMirrored.Filled.List) { closeThen { studio.navigate(Screen.MultiImport) } }
+            DrawerItem("Toplu Kırpma", Icons.Filled.Edit) { closeThen { studio.navigate(Screen.Batch) } }
+            DrawerGroup("Yedek Ve Veri")
             DrawerItem("Yedekle", Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring) { closeThen { studio.backup() } }
-            DrawerItem("Yedekten geri yükle", Icons.Filled.Refresh, enabled = !studio.isRestoring) { closeThen { startRestore() } }
-            DrawerItem("Tüm sınıflar ZIP (klasörlü + rapor)", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportAllFoldersZip() } }
-            DrawerItem("Sınıfları PDF olarak aktar", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportClassesPdf() } }
-            DrawerItem("Eksik klasör dosyalarını onar", Icons.Filled.Build, enabled = hasClasses) { closeThen { studio.repairFolderFiles() } }
-            DrawerItem("Veri denetimi", Icons.Filled.Search, enabled = hasClasses) { closeThen { studio.auditData() } }
+            DrawerItem("Yedekten Geri Yükle", Icons.Filled.Refresh, enabled = !studio.isRestoring) { closeThen { startRestore() } }
+            DrawerItem("Tüm Sınıflar ZIP (Klasörlü + Rapor)", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportAllFoldersZip() } }
+            DrawerItem("Sınıfları PDF Olarak Aktar", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportClassesPdf() } }
+            DrawerItem("Eksik Klasör Dosyalarını Onar", Icons.Filled.Build, enabled = hasClasses) { closeThen { studio.repairFolderFiles() } }
+            DrawerItem("Veri Denetimi", Icons.Filled.Search, enabled = hasClasses) { closeThen { studio.auditData() } }
             DrawerGroup("Uygulama")
             DrawerItem("Ayarlar", Icons.Filled.Settings) { closeThen { studio.navigate(Screen.Settings) } }
             Spacer(Modifier.size(16.dp))
@@ -452,12 +452,16 @@ private fun HomeDrawer(studio: StudioViewModel, closeThen: (() -> Unit) -> Unit,
     }
 }
 
+/** Grup başlığı: tam genişlikte pastel dolgulu şerit. */
 @Composable
 private fun DrawerGroup(title: String) {
+    val soft = softColors()
+    Spacer(Modifier.size(8.dp))
     Text(
-        title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 28.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+        title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = soft.onGroup,
+        modifier = Modifier.fillMaxWidth().background(soft.group).padding(horizontal = 28.dp, vertical = 8.dp)
     )
+    Spacer(Modifier.size(4.dp))
 }
 
 @Composable
