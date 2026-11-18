@@ -11,10 +11,6 @@ import androidx.compose.runtime.setValue
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.eokul.studio.core.BackupZip
-import com.eokul.studio.core.CrossClass
-import com.eokul.studio.core.Crop
-import com.eokul.studio.core.RestoreGuard
 import com.eokul.studio.core.RosterParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -318,8 +314,17 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ------------------------------------------------------------------ kayıt klasörü
+    /** Seçili kayıt klasörü; seçilmemişse null. */
+    private val rootUri: Uri? get() = settings.rootUri?.let { Uri.parse(it) }
+
+    /** Kayıt klasörü seçili değilse kullanıcıya söyler ve null döner. */
+    private fun requireRoot(): Uri? = rootUri ?: run {
+        say("Önce kayıt klasörünü seçin")
+        null
+    }
+
     private fun refreshRootName() {
-        val u = settings.rootUri?.let { Uri.parse(it) }
+        val u = rootUri
         rootName = if (u == null) null else try {
             DocumentFile.fromTreeUri(ctx, u)?.name
         } catch (e: Exception) {
@@ -328,7 +333,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun hasRootAccess(): Boolean {
-        val u = settings.rootUri?.let { Uri.parse(it) } ?: return false
+        val u = rootUri ?: return false
         return ctx.contentResolver.persistedUriPermissions.any { it.uri == u && it.isWritePermission }
     }
 
@@ -376,7 +381,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         }
         val oldDir = RosterParser.sanitizeFileName(c.name)
         val newDir = RosterParser.sanitizeFileName(n)
-        val root = settings.rootUri?.let { Uri.parse(it) }
+        val root = rootUri
         if (root != null && oldDir != newDir) {
             viewModelScope.launch {
                 val ok = withContext(Dispatchers.IO) { folders.renameClassDirs(root, oldDir, newDir) }
@@ -390,7 +395,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     /** [alsoFiles] true ise kayıt klasöründeki sınıf klasörü (çıktılar ve Orijinaller) de içindekilerle silinir. */
     fun deleteClass(id: String, alsoFiles: Boolean = false) {
         val c = classById(id) ?: return
-        val root = settings.rootUri?.let { Uri.parse(it) }
+        val root = rootUri
         classes.removeAll { it.id == id }
         persist()
         viewModelScope.launch {
@@ -463,7 +468,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteStudent(classId: String, no: String, alsoFiles: Boolean = false) {
         val cls = classById(classId)
         val st = cls?.students?.firstOrNull { it.no == no }
-        val root = settings.rootUri?.let { Uri.parse(it) }
+        val root = rootUri
         updateClass(classId) { c -> c.copy(students = c.students.filter { it.no != no }) }
         if (cls != null && st != null) {
             viewModelScope.launch(Dispatchers.IO) { folders.deleteStudent(classId, cls.name, st, if (alsoFiles) root else null) }
@@ -475,7 +480,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     fun clearPhoto(classId: String, no: String) {
         val cls = classById(classId) ?: return
         val st = cls.students.firstOrNull { it.no == no } ?: return
-        val root = settings.rootUri?.let { Uri.parse(it) }
+        val root = rootUri
         updateStudent(classId, no) {
             it.copy(captured = false, box = null, origUri = null, savedStem = null, faceCount = 0, updatedAt = 0L, retake = false, score = -1)
         }
@@ -495,10 +500,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openCamera(classId: String, no: String) {
-        if (settings.rootUri == null) {
-            say("Önce kayıt klasörünü seçin")
-            return
-        }
+        if (requireRoot() == null) return
         navigate(Screen.Camera(classId, no))
     }
 
@@ -514,18 +516,14 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     fun editSavedCrop(classId: String, no: String) {
         val cls = classById(classId) ?: return
         val st = cls.students.firstOrNull { it.no == no } ?: return
-        val rootStr = settings.rootUri
-        if (rootStr == null) {
-            say("Önce kayıt klasörünü seçin")
-            return
-        }
+        val root = requireRoot() ?: return
         viewModelScope.launch {
             // Kayıtlı orijinal gerçekten var mı? Taşınmış/yeniden adlandırılmışsa klasörde numaraya göre ara.
             val found: Uri? = withContext(Dispatchers.IO) {
                 val u = st.origUri?.let { Uri.parse(it) }
                 if (u != null && Output.exists(ctx, u)) u
                 else Output.findFile(
-                    ctx, Uri.parse(rootStr),
+                    ctx, root,
                     listOf(RosterParser.sanitizeFileName(cls.name), ORIGINALS_DIR),
                     st.savedStem ?: RosterParser.studentStem(st.no, st.name), st.no + "-"
                 )
@@ -699,12 +697,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
      * Düzen: sınıf başlığı, numara sırasıyla 7'li satırlar, fotoğraf altında numara ve ad; her sınıf yeni sayfada başlar.
      */
     fun exportClassesPdf(classId: String? = null) {
-        val rootStr = settings.rootUri
-        if (rootStr == null) {
-            say("Önce kayıt klasörünü seçin")
-            return
-        }
-        val root = Uri.parse(rootStr)
+        val root = requireRoot() ?: return
         val snap = classes.toList().filter { classId == null || it.id == classId }
         if (snap.isEmpty() || snap.all { it.students.isEmpty() }) {
             say("PDF için öğrenci yok")
@@ -747,12 +740,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun exportZip(snap: List<SchoolClass>, zipName: String, label: String, folders: Boolean = false) {
-        val rootStr = settings.rootUri
-        if (rootStr == null) {
-            say("Önce kayıt klasörünü seçin")
-            return
-        }
-        val root = Uri.parse(rootStr)
+        val root = requireRoot() ?: return
         viewModelScope.launch {
             try {
                 val res = withContext(Dispatchers.IO) {
@@ -852,12 +840,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Sınıf listesi + küçük fotoğraflar: kayıt klasörü/Yedek/Ydk_ggaayy_ssdd.zip (akış tabanlı, doğrulamalı). */
     fun backup() {
-        val rootStr = settings.rootUri
-        if (rootStr == null) {
-            say("Önce kayıt klasörünü seçin")
-            return
-        }
-        val root = Uri.parse(rootStr)
+        val root = requireRoot() ?: return
         viewModelScope.launch {
             try {
                 saveMutex.withLock {
@@ -904,11 +887,11 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 saveMutex.withLock {
                 var safety: String? = null
                 if (classes.isNotEmpty()) {
-                    val rootStr = settings.rootUri ?: throw IOException(
+                    val root = rootUri ?: throw IOException(
                         "Önce kayıt klasörünü seçin (geri yükleme öncesinde mevcut verinin güvenlik yedeği alınır)"
                     )
                     safety = backups.write(
-                        backupStorage(Uri.parse(rootStr)), classes.toList(), com.eokul.studio.core.BackupNames.SAFETY_PREFIX
+                        backupStorage(root), classes.toList(), com.eokul.studio.core.BackupNames.SAFETY_PREFIX
                     ).name
                 }
 
@@ -923,7 +906,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     "retake", restored.classes.sumOf { c -> c.students.count { it.retake } },
                     "boxes", restored.classes.sumOf { c -> c.students.count { it.box != null } }
                 )
-                if (safety != null) settings.rootUri?.let { pruneSafetyBackups(Uri.parse(it)) }
+                if (safety != null) rootUri?.let { pruneSafetyBackups(it) }
                 say(
                     "✓ ${restored.classes.size} sınıf geri yüklendi · ${restored.classes.sumOf { c -> c.students.count { it.captured } }} çekilmiş öğrenci · " +
                         "${restored.classes.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · " +
@@ -982,8 +965,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
      * yarım kalmış gizli (.tmp-/.old-) dosya var mı. Dosyalar beklenen yerde değilse kök klasördeki adlar gösterilir.
      */
     private fun folderAudit(snap: List<SchoolClass>): String {
-        val rootStr = settings.rootUri ?: return "⚠ Kayıt klasörü seçilmemiş."
-        val root = Uri.parse(rootStr)
+        val root = rootUri ?: return "⚠ Kayıt klasörü seçilmemiş."
         return DataAudit.folderLines(snap, rootName, ORIGINALS_DIR) { path -> Output.listNames(ctx, root, path) }
     }
 
@@ -992,8 +974,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
      * Önceki bir hata nedeniyle yazıldıktan hemen sonra silinen dosyalar için.
      */
     fun repairFolderFiles() {
-        val rootStr = settings.rootUri ?: run { say("Önce kayıt klasörünü seçin"); return }
-        val root = Uri.parse(rootStr)
+        val root = requireRoot() ?: return
         val snap = classes.toList()
         viewModelScope.launch {
             val (fixed, lost) = withContext(Dispatchers.IO) {
@@ -1039,11 +1020,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     fun syncFileNames(classId: String) {
         val cls = classById(classId) ?: return
-        val rootStr = settings.rootUri ?: run {
-            say("Önce kayıt klasörünü seçin")
-            return
-        }
-        val root = Uri.parse(rootStr)
+        val root = requireRoot() ?: return
         viewModelScope.launch {
             var done = 0
             val results = withContext(Dispatchers.IO) { folders.syncNames(root, cls) }
@@ -1068,12 +1045,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val s = cap.session ?: return
         if (cap.saving) return
         val px = s.pixels ?: return
-        val rootStr = settings.rootUri
-        if (rootStr == null) {
-            say("Önce kayıt klasörünü seçin")
-            return
-        }
-        val root = Uri.parse(rootStr)
+        val root = requireRoot() ?: return
         val cls = classById(cap.classId) ?: return
         val st = cls.students.firstOrNull { it.no == cap.no } ?: return
         val set = settings
