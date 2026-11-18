@@ -130,7 +130,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
     var live by remember { mutableStateOf<LiveFace?>(null) }
     val liveRaw = remember { java.util.concurrent.atomic.AtomicReference<LiveFace?>(null) }
     var progress by remember { mutableStateOf(0f) }
-    var armed by remember { mutableStateOf(false) }
+    val shutter = remember { AutoShutter(System.currentTimeMillis()) }
     var focusMark by remember { mutableStateOf<Offset?>(null) }
     var gate by remember { mutableStateOf<LiveEval?>(null) }
     var score by remember { mutableStateOf(-1) }
@@ -214,8 +214,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                     camera = provider.bindToLifecycle(activity, cs, preview, imageCapture, analysis)
                     val mirror = !lensBack
                     var frameNo = 0
-                    var lightCand = 0
-                    var lightCandN = 0
+                    val lightDebounce = LightDebouncer()
                     var lastAnalysisMs = 0L
                     analysis.setAnalyzer(analysisExecutor) { proxy ->
                         // Saniyede ~12 kare yeterli: bellek hareketi ve ısınma azalır
@@ -248,23 +247,15 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                                 var x1 = r.left / uw
                                 var x2 = r.right / uw
                                 if (mirror) {
-                                    val t = 1f - x2
-                                    x2 = 1f - x1
-                                    x1 = t
+                                    val m = LiveMath.mirror(x1, x2)
+                                    x1 = m.first
+                                    x2 = m.second
                                 }
                                 // Göz çizgisinden hassas yan eğiklik
-                                var roll = f.headEulerAngleZ
                                 val le = f.getLandmark(FaceLandmark.LEFT_EYE)?.position
                                 val re = f.getLandmark(FaceLandmark.RIGHT_EYE)?.position
-                                if (le != null && re != null && Math.abs(re.x - le.x) > 8f) {
-                                    var ang = Math.toDegrees(Math.atan2((re.y - le.y).toDouble(), (re.x - le.x).toDouble())).toFloat()
-                                    if (ang > 90f) ang -= 180f
-                                    if (ang < -90f) ang += 180f
-                                    roll = ang
-                                }
-                                val lo = f.leftEyeOpenProbability
-                                val ro = f.rightEyeOpenProbability
-                                val eyeOpen = if (lo != null && ro != null) Math.min(lo, ro) else -1f
+                                val roll = LiveMath.roll(f.headEulerAngleZ, le?.x, le?.y, re?.x, re?.y)
+                                val eyeOpen = LiveMath.eyeOpen(f.leftEyeOpenProbability, f.rightEyeOpenProbability)
                                 // Netlik / ışık ölçümü (her 3 karede bir; aradaki karelerde son değer korunur)
                                 val prev = liveRaw.get()
                                 var sharp = prev?.sharp ?: Float.NaN
@@ -275,8 +266,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                                     // Işık durumu: ani titreşim olmasın diye aynı sonuç art arda 3 ölçümde görülünce kabul edilir
                                     val lr = measureLight(bmp, rot, r)
                                     if (lr != null) {
-                                        if (lr.code == lightCand) lightCandN++ else { lightCand = lr.code; lightCandN = 1 }
-                                        if (lightCandN >= 3) light = lightCand
+                                        lightDebounce.feed(lr.code)?.let { light = it }
                                     }
                                     val q = measureFace(bmp, rot, r)
                                     if (q != null) {
@@ -354,10 +344,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                     androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
                     androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
                 )
-                val next = when (cur) {
-                    1 -> 2; 2 -> 1; 3 -> 4; 4 -> 3; 5 -> 8; 8 -> 5; 6 -> 7; 7 -> 6
-                    else -> 2
-                }
+                val next = ExifFlip.next(cur)
                 ei.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, next.toString())
                 ei.saveAttributes()
                 val back = androidx.exifinterface.media.ExifInterface(best.absolutePath)
@@ -460,99 +447,40 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
 
     // Öğrenci değişince otomatik çekim yeniden silahlanır (önceki öğrencinin hâlâ çerçevede olması durumuna karşı)
     LaunchedEffect(no) {
-        armed = false
+        shutter.reset()
         progress = 0f
     }
     // Anlık değerlendirme: yüze otomatik odak, hazır ve sabitse geri sayım ve otomatik çekim
     LaunchedEffect(autoOn, hasPerm, camera) {
-        var readySince = 0L
-        var noReadySince = System.currentTimeMillis()
-        var lastCx = -1f
-        var lastCy = -1f
+        shutter.restartLoop(System.currentTimeMillis())
         var lastFocusMs = 0L
         var lastFocusX = -1f
         var lastFocusY = -1f
-        var sharpSince = 0L
-        var lightSince = 0L
         while (isActive) {
             delay(100)
             val now = System.currentTimeMillis()
             live = liveRaw.get()   // arayüz durumu yalnızca 10 Hz güncellenir (30 Hz yeniden çizim yok)
             val l = live?.takeIf { now - it.ts < 700 }
-            if (l == null) {
-                gate = null
-                score = -1
-                sharpSince = 0L
-                readySince = 0L
-                progress = 0f
-                lastCx = -1f
-                lastCy = -1f
-                if (noReadySince == 0L) noReadySince = now
-                if (now - noReadySince >= 1000L) armed = true
-                continue
-            }
             // Yüze sürekli odak / pozlama
-            val moved = Math.abs(l.cx - lastFocusX) > 0.08f || Math.abs(l.cy - lastFocusY) > 0.08f
-            if (camera != null && !capturing && (now - lastFocusMs > 2500L || (moved && now - lastFocusMs > 800L))) {
-                focusAt(l.cx, l.cy, false)
-                lastFocusMs = now
-                lastFocusX = l.cx
-                lastFocusY = l.cy
+            if (l != null) {
+                val moved = Math.abs(l.cx - lastFocusX) > 0.08f || Math.abs(l.cy - lastFocusY) > 0.08f
+                if (camera != null && !capturing && (now - lastFocusMs > 2500L || (moved && now - lastFocusMs > 800L))) {
+                    focusAt(l.cx, l.cy, false)
+                    lastFocusMs = now
+                    lastFocusX = l.cx
+                    lastFocusY = l.cy
+                }
             }
-            val smart = studio.settings.smartShot
+            val st = studio.settings
             val motionOk = motion.steady
-            var ev = evaluateLive(l, studio.settings, motionOk, smart, false, false)
-            // Işık engeli yalnızca uyarıdır: 2 sn sonra vazgeçilir (ortam değiştirilemiyorsa çekim kilitlenmesin)
-            var lightIgnored = false
-            if (ev.lightOnly) {
-                if (lightSince == 0L) lightSince = now
-                if (now - lightSince > 2000L) {
-                    lightIgnored = true
-                    ev = evaluateLive(l, studio.settings, motionOk, smart, false, true)
-                }
-            } else {
-                lightSince = 0L
-            }
-            // Yalnızca netlik engeliyse 3 sn sonra vazgeç (eşik uygun olmayan ortamda çekimi kilitlememek için)
-            if (ev.sharpOnly) {
-                if (sharpSince == 0L) sharpSince = now
-                if (now - sharpSince > 3000L) ev = evaluateLive(l, studio.settings, motionOk, smart, true, lightIgnored)
-            } else {
-                sharpSince = 0L
-            }
-            if (lightIgnored && ev.ready) ev = LiveEval(true, "Hazır — ışık ideal değil, sabit durun", ev.dev)
-            gate = ev
-            score = Score.total(
-                ev.dev.toDouble(), l.sharp.toDouble(), Math.abs(l.roll).toDouble(), Math.abs(l.yaw).toDouble(),
-                l.bright.toDouble(), l.contrast.toDouble(), l.eyeOpen.toDouble()
+            val r = shutter.step(
+                now, l, { giveUpSharp, giveUpLight -> evaluateLive(l!!, st, motionOk, st.smartShot, giveUpSharp, giveUpLight) },
+                autoOn, capturing, st.autoHoldMs
             )
-            val still = lastCx < 0f || (Math.abs(l.cx - lastCx) < 0.03f && Math.abs(l.cy - lastCy) < 0.03f)
-            lastCx = l.cx
-            lastCy = l.cy
-            if (!ev.ready || !still) {
-                readySince = 0L
-                progress = 0f
-                if (!ev.ready) {
-                    if (noReadySince == 0L) noReadySince = now
-                    if (now - noReadySince >= 1000L) armed = true
-                }
-                continue
-            }
-            // hazır
-            if (!autoOn || capturing) continue
-            if (!armed) {
-                // önceki öğrenci hâlâ çerçevedeyse: önce yüz hazır değil durumuna geçmesi beklenir
-                progress = 0f
-                continue
-            }
-            noReadySince = 0L
-            if (readySince == 0L) readySince = now
-            progress = ((now - readySince) / studio.settings.autoHoldMs.toFloat()).coerceIn(0f, 1f)
-            if (progress >= 1f) {
-                armed = false
-                readySince = 0L
-                progress = 0f
-                noReadySince = 0L
+            gate = r.eval
+            score = r.score
+            progress = shutter.progress
+            if (r.fire && l != null) {
                 // Odak ve pozlamayı yüze kilitle, kısa süre otursun, sonra çek
                 focusAt(l.cx, l.cy, false)
                 delay(250)
