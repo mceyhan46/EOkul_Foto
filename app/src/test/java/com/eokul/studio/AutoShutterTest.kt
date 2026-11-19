@@ -81,7 +81,7 @@ class AutoShutterTest {
         assertFalse(s.at(3000, ev = ev).eval!!.ready)           // 1900 ms: henüz değil
         val r = s.at(3200, ev = ev)                              // >2000 ms: vazgeç
         assertTrue(r.eval!!.ready)
-        assertTrue(r.eval!!.hint.contains("ışık ideal değil"))
+        assertTrue(r.eval.hint.contains("ışık ideal değil"))
         assertTrue(calls.contains(false to true))
     }
 
