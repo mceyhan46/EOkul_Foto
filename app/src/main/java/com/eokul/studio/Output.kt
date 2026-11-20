@@ -20,8 +20,10 @@ object Output {
     // ------------------------------------------------------------------ iç içe klasör yolu (sınıf akışı)
 
     private fun dirFor(ctx: Context, tree: Uri, segments: List<String>, create: Boolean): DocumentFile? {
-        var cur = DocumentFile.fromTreeUri(ctx, tree) ?: throw IOException("Ana klasöre erişilemiyor")
-        for (seg in segments) {
+        // Kayıt klasörü "ağaç#EOkul_Studio" biçiminde olabilir: yollar ağacın içindeki alt klasörden başlar.
+        val ref = RootRules.decode(tree.toString())
+        var cur = DocumentFile.fromTreeUri(ctx, Uri.parse(ref.base)) ?: throw IOException("Ana klasöre erişilemiyor")
+        for (seg in listOfNotNull(ref.sub) + segments) {
             val found = cur.findFile(seg)
             cur = if (found != null && found.isDirectory) {
                 found

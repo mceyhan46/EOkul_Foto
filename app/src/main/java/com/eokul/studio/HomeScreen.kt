@@ -67,9 +67,6 @@ import androidx.compose.ui.draw.alpha
 
 @Composable
 fun HomeScreen(studio: StudioViewModel) {
-    val rootPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
-        if (uri != null) studio.setRootFolder(uri)
-    }
     var newClassOpen by remember { mutableStateOf(false) }
     var renameId by remember { mutableStateOf<String?>(null) }
     var deleteId by remember { mutableStateOf<String?>(null) }
@@ -108,25 +105,7 @@ fun HomeScreen(studio: StudioViewModel) {
                     }
                 }
 
-                if (studio.settings.rootUri == null || !studio.hasRootAccess()) {
-                    Card(
-                        Modifier.fillMaxWidth().padding(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-                    ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(
-                                if (studio.settings.rootUri == null) "Kayıt klasörü seçilmedi" else "Kayıt klasörü izni kaybolmuş",
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "Fotoğraflar seçeceğiniz klasörün altında sınıf klasörlerine kaydedilir.",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Spacer(Modifier.size(6.dp))
-                            Button(onClick = { rootPicker.launch(null) }) { Text("📂 Klasör seç") }
-                        }
-                    }
-                }
+                RootStatusCard(studio)
 
                 if (studio.classes.isNotEmpty()) SummaryCard(studio)
 

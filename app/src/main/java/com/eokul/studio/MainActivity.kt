@@ -227,6 +227,8 @@ fun AppRoot(vm: AppViewModel, studio: StudioViewModel) {
         )
     }
 
+    if (!studio.locked) RootSetupDialog(studio)
+
     studio.startupNote?.let { note ->
         AlertDialog(
             onDismissRequest = { studio.dismissStartupNote() },

@@ -51,9 +51,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         if (uri != null) studio.saveReportTo(uri)
     }
     val shareCtx = androidx.compose.ui.platform.LocalContext.current
-    val rootPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
-        if (uri != null) studio.setRootFolder(uri)
-    }
+    val rootPicker = rememberRootPicker(studio)
     val cur = vm.settings
     val def = Settings()
 
@@ -155,13 +153,16 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         // ---------------- Kayıt (sınıf akışı)
         SettingsCard("Genel", "Kayıt klasörü ve çekim akışı") {
         Text(
-            "Kayıt klasörü: ${studio.rootName ?: "seçilmedi"}",
+            "Kayıt klasörü: ${studio.rootName ?: "kurulmadı"}",
             style = MaterialTheme.typography.bodyMedium
         )
+        RootRules.problem(studio.rootState)?.let {
+            if (studio.rootState != RootRules.State.NOT_SET) Text("⚠ $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
         Spacer(Modifier.size(4.dp))
-        OutlinedButton(onClick = { rootPicker.launch(null) }) { Text("Klasör seç / değiştir") }
+        OutlinedButton(onClick = rootPicker) { Text(if (studio.rootState == RootRules.State.NOT_SET) "Klasörü Kur" else "Klasörü Değiştir") }
         Text(
-            "Yapı: Sınıf/12345-Ad Soyad.jpg · Sınıf/Orijinaller/12345-Ad Soyad.jpg",
+            "Yapı: Sınıf/12345-Ad Soyad.jpg · Sınıf/Orijinaller/12345-Ad Soyad.jpg. Klasörü değiştirirseniz mevcut dosyalar eski yerinde kalır.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.size(8.dp))

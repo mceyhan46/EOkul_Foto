@@ -2,13 +2,11 @@ package com.eokul.studio
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.eokul.studio.core.RosterParser
@@ -121,7 +119,6 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         }
         classes.addAll(store.load())
         startupNote = listOfNotNull(store.loadNote, recoveryError).joinToString("\n\n").ifBlank { null }
-        refreshRootName()
     }
 
     fun updateSettings(s: Settings) {
@@ -139,6 +136,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Uygulama arka plandan dönerse ve 30 sn'den uzun kaldıysa kilitler. */
     fun onForegrounded() {
+        refreshRoot()
         if (PinLock.shouldLock(settings.pinHash != null, backgroundedAt, System.currentTimeMillis())) locked = true
     }
 
@@ -317,39 +315,77 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     /** Seçili kayıt klasörü; seçilmemişse null. */
     private val rootUri: Uri? get() = settings.rootUri?.let { Uri.parse(it) }
 
-    /** Kayıt klasörü seçili değilse kullanıcıya söyler ve null döner. */
-    private fun requireRoot(): Uri? = rootUri ?: run {
-        say("Önce kayıt klasörünü seçin")
-        null
-    }
+    private val rootFolder by lazy { RootFolder(ctx) }
+    private var rootPrompted = false
 
-    private fun refreshRootName() {
+    /** Kayıt klasörünün güncel durumu (açılışta, ekrana dönüşte ve kurulumdan sonra [refreshRoot] günceller). */
+    var rootState by mutableStateOf(RootRules.State.NOT_SET)
+        private set
+
+    /** true ise uygulama genelinde "Kayıt klasörü kurulumu" penceresi gösterilir. */
+    var rootSetupRequested by mutableStateOf(false)
+
+    /**
+     * Kayıt klasörü kullanılabilir değilse kurulum penceresini açar ve null döner. Eksik alt klasör
+     * (EOkul_Studio silinmişse) sessizce yeniden açılmaya çalışılır.
+     */
+    private fun requireRoot(): Uri? {
         val u = rootUri
-        rootName = if (u == null) null else try {
-            DocumentFile.fromTreeUri(ctx, u)?.name
-        } catch (e: Exception) {
-            null
+        if (u != null && rootState == RootRules.State.READY) return u
+        say(RootRules.problem(rootState) ?: "Önce kayıt klasörünü kurun")
+        rootSetupRequested = true
+        return null
+    }
+
+    /** Durumu ve gösterilen yolu yeniler; EOkul_Studio klasörü silinmişse yeniden oluşturur. */
+    fun refreshRoot() {
+        viewModelScope.launch {
+            val stored = settings.rootUri
+            val (state, label, repaired) = withContext(Dispatchers.IO) {
+                var st = rootFolder.status(stored)
+                var fixed = false
+                if (st == RootRules.State.MISSING && stored != null && rootFolder.repair(stored)) {
+                    st = rootFolder.status(stored)
+                    fixed = st == RootRules.State.READY
+                }
+                Triple(st, rootFolder.label(stored), fixed)
+            }
+            rootState = state
+            rootName = label
+            // İlk açılışta (kurulum yok) bir kez kurulum penceresi açılır
+            if (state == RootRules.State.NOT_SET && !rootPrompted && !locked) {
+                rootPrompted = true
+                rootSetupRequested = true
+            }
+            if (repaired) say("✓ ${RootRules.DEFAULT_SUB} klasörü yeniden oluşturuldu")
         }
     }
 
-    fun hasRootAccess(): Boolean {
-        val u = rootUri ?: return false
-        return ctx.contentResolver.persistedUriPermissions.any { it.uri == u && it.isWritePermission }
-    }
-
+    /** Kullanıcının seçtiği klasörü kurar (içinde EOkul_Studio açar); eski izni bırakır. */
     fun setRootFolder(uri: Uri) {
-        try {
-            ctx.contentResolver.takePersistableUriPermission(
-                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        viewModelScope.launch {
+            val old = settings.rootUri
+            val result = withContext(Dispatchers.IO) { runCatching { rootFolder.setup(uri) } }
+            val setup = result.getOrElse {
+                say("⚠ " + (it.message ?: "Klasör kurulamadı"))
+                return@launch
+            }
+            if (old != null && RootRules.decode(old).base != RootRules.decode(setup.encoded).base) {
+                withContext(Dispatchers.IO) { rootFolder.release(old) }
+            }
+            SettingsState.update(settings.copy(rootUri = setup.encoded))
+            rootSetupRequested = false
+            refreshRoot()
+            val where = withContext(Dispatchers.IO) { rootFolder.label(setup.encoded) }
+            say(
+                if (setup.reused) "✓ Mevcut klasör bulundu: $where. Yedek veya klasör içeriğinden devam edebilirsiniz."
+                else "✓ Kayıt klasörü hazır: $where"
             )
-        } catch (e: Exception) {
-            say("Klasör izni alınamadı")
-            return
         }
-        SettingsState.update(settings.copy(rootUri = uri.toString()))
-        refreshRootName()
-        say("✓ Kayıt klasörü: ${rootName ?: "seçildi"}")
     }
+
+    /** Seçici "Belgeler"de açılsın. */
+    val pickerHint: Uri get() = RootFolder.documentsHint()
 
     // ------------------------------------------------------------------ sınıflar
     private fun newId(): String =
