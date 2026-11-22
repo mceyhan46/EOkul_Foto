@@ -112,7 +112,9 @@ class RootFolder(private val ctx: Context) {
             if (d != null && ref.sub != null) d = d.findFile(ref.sub)?.takeIf { it.isDirectory }
             exists = d != null
             writable = d?.canWrite() == true
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Ops.error("root_status", e)
+        }
         return RootRules.status(true, grant, exists, writable)
     }
 

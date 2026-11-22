@@ -5,9 +5,11 @@ import android.os.Build
 import com.eokul.studio.core.OpLog
 import com.eokul.studio.core.OpLogReport
 import java.io.File
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 /**
  * Cihaz üstü işlem günlüğü (çekim, kare puanı, kayıt, hata, yedek...). Öğrenci adı yazılmaz; numara kısa bir
@@ -32,7 +34,7 @@ object Ops {
         appCtx = ctx.applicationContext
         // Öğrenci numarası kısa kimliğe cihaza özgü rastgele tuzla çevrilir: kimlikten numara geri çıkarılamaz.
         val sp = ctx.applicationContext.getSharedPreferences("eokul_ops", Context.MODE_PRIVATE)
-        salt = sp.getString("salt", null) ?: java.util.UUID.randomUUID().toString().also { sp.edit().putString("salt", it).apply() }
+        salt = sp.getString("salt", null) ?: UUID.randomUUID().toString().also { sp.edit().putString("salt", it).apply() }
         log = OpLog(File(ctx.filesDir, "oplog.jsonl"), 600_000L)
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
@@ -47,7 +49,7 @@ object Ops {
     }
 
     private fun appStartInternal(s: Settings) {
-        val ver = try { appCtx?.packageManager?.getPackageInfo(appCtx!!.packageName, 0)?.versionName } catch (_: Throwable) { null }
+        val ver = try { appCtx?.let { it.packageManager.getPackageInfo(it.packageName, 0).versionName } } catch (_: Throwable) { null }
         log("app_start", "ver", ver ?: "?", "dev", "${Build.MANUFACTURER} ${Build.MODEL}", "sdk", Build.VERSION.SDK_INT,
             "hq", s.hqCapture, "flipB", s.flipCapture, "flipF", s.flipFront, "std", "${s.photoW}x${s.photoH}",
             "maxKb", s.maxKb, "smart", s.smartShot, "holdMs", s.autoHoldMs)
@@ -59,7 +61,7 @@ object Ops {
 
     /** Öğrenci numarasının kısa, geri döndürülemeyen kimliği. */
     fun id(no: String): String = try {
-        java.security.MessageDigest.getInstance("SHA-256").digest((salt + no).toByteArray())
+        MessageDigest.getInstance("SHA-256").digest((salt + no).toByteArray())
             .take(3).joinToString("") { "%02x".format(it) }
     } catch (_: Throwable) {
         "?"

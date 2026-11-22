@@ -2,6 +2,7 @@ package com.eokul.studio
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -140,7 +141,7 @@ fun PinDialog(studio: StudioViewModel, hasPin: Boolean, onDismiss: () -> Unit) {
             }) { Text("Kaydet") }
         },
         dismissButton = {
-            androidx.compose.foundation.layout.Row {
+            Row {
                 if (hasPin) {
                     TextButton(onClick = {
                         if (!studio.checkPin(current)) {

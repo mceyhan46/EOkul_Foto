@@ -1,5 +1,6 @@
 package com.eokul.studio
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -29,13 +32,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolean, onClose: () -> Unit) {
@@ -50,7 +58,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
     val reportSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
         if (uri != null) studio.saveReportTo(uri)
     }
-    val shareCtx = androidx.compose.ui.platform.LocalContext.current
+    val shareCtx = LocalContext.current
     val cur = vm.settings
     val def = Settings()
 
@@ -142,7 +150,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         }
         Spacer(Modifier.size(8.dp))
         if (studio.isRestoring) {
-            androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+            LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(
                 "Yedek güvenli biçimde geri yükleniyor. İşlem tamamlanana kadar uygulamayı kapatmayın.",
                 style = MaterialTheme.typography.bodySmall,
@@ -380,11 +388,11 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
                 AppButton("Raporu paylaş", onClick = {
                     scope.launch {
                         val t = studio.reportTextForShare()
-                        val send = android.content.Intent(android.content.Intent.ACTION_SEND)
+                        val send = Intent(Intent.ACTION_SEND)
                             .setType("text/plain")
-                            .putExtra(android.content.Intent.EXTRA_SUBJECT, "E-Okul Foto Studio raporu")
-                            .putExtra(android.content.Intent.EXTRA_TEXT, t)
-                        try { shareCtx.startActivity(android.content.Intent.createChooser(send, "Raporu gönder")) } catch (_: Exception) { studio.toast("Paylaşım açılamadı; “Dosyaya kaydet” kullanın") }
+                            .putExtra(Intent.EXTRA_SUBJECT, "E-Okul Foto Studio raporu")
+                            .putExtra(Intent.EXTRA_TEXT, t)
+                        try { shareCtx.startActivity(Intent.createChooser(send, "Raporu gönder")) } catch (_: Exception) { studio.toast("Paylaşım açılamadı; “Dosyaya kaydet” kullanın") }
                     }
                 }, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
                 AppButton("Dosyaya kaydet", onClick = { reportSaver.launch(studio.reportFileName()) }, style = BtnStyle.Secondary, modifier = Modifier.weight(1f))
@@ -419,7 +427,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         val lastB = vm.settings.lastBackupMs
         Text(
             if (lastB == 0L) "Son yedek: hiç alınmadı"
-            else "Son yedek: " + java.text.SimpleDateFormat("d MMM yyyy HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(lastB)),
+            else "Son yedek: " + SimpleDateFormat("d MMM yyyy HH:mm", Locale.forLanguageTag("tr")).format(Date(lastB)),
             style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 6.dp)
         )
@@ -482,19 +490,19 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.size(20.dp))
-        val appCtx = androidx.compose.ui.platform.LocalContext.current
+        val appCtx = LocalContext.current
         val version = remember {
             try { appCtx.packageManager.getPackageInfo(appCtx.packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
         }
         Text(
             "E-Okul Foto Studio" + if (version.isNotEmpty()) " · Sürüm $version" else "",
             style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
         )
         Text(
             "Copyright © 2026 Hacimd. All rights reserved.",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(top = 2.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp), textAlign = TextAlign.Center
         )
         Spacer(Modifier.size(24.dp))
     }
@@ -505,7 +513,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
 /** Ayarlar bölümü: başlık, kısa açıklama ve içerik tek, sade kartta. */
 @Composable
 private fun SettingsCard(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
-    androidx.compose.material3.Card(Modifier.fillMaxWidth().padding(top = 10.dp), colors = softCardColors()) {
+    Card(Modifier.fillMaxWidth().padding(top = 10.dp), colors = softCardColors()) {
         Column(Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = softColors().onGroup)
             Text(

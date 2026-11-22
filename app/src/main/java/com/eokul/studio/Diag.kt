@@ -1,8 +1,10 @@
 package com.eokul.studio
 
 import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
 import android.os.Build
+import android.os.Debug
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -20,7 +22,7 @@ object Diag {
         val rt = Runtime.getRuntime()
         val usedMb = (rt.totalMemory() - rt.freeMemory()) / 1048576
         val maxMb = rt.maxMemory() / 1048576
-        val nativeMb = android.os.Debug.getNativeHeapAllocatedSize() / 1048576
+        val nativeMb = Debug.getNativeHeapAllocatedSize() / 1048576
         return "Java yığını $usedMb/$maxMb MB, yerel $nativeMb MB"
     }
 
@@ -68,18 +70,18 @@ object Diag {
                     if (ei.timestamp <= seen) continue
                     if (ei.timestamp > maxTs) maxTs = ei.timestamp
                     val name = when (ei.reason) {
-                        android.app.ApplicationExitInfo.REASON_ANR -> "Uygulama yanıt vermedi (ANR)"
-                        android.app.ApplicationExitInfo.REASON_CRASH -> "Çökme"
-                        android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "Yerel (native) çökme"
-                        android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "Bellek yetersiz"
-                        android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "Aşırı kaynak kullanımı"
-                        android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "Başlatma hatası"
+                        ApplicationExitInfo.REASON_ANR -> "Uygulama yanıt vermedi (ANR)"
+                        ApplicationExitInfo.REASON_CRASH -> "Çökme"
+                        ApplicationExitInfo.REASON_CRASH_NATIVE -> "Yerel (native) çökme"
+                        ApplicationExitInfo.REASON_LOW_MEMORY -> "Bellek yetersiz"
+                        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "Aşırı kaynak kullanımı"
+                        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "Başlatma hatası"
                         else -> null
                     } ?: continue
                     // Uygulama arka planda (kullanılmıyorken) bellek için kapatıldıysa bu normal bir Android davranışıdır:
                     // veriler kayıtlıdır, kullanıcıya gösterilmez. Yalnızca ön plandayken olan kapanmalar bildirilir.
                     val wasForeground = ei.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
-                    if (ei.reason == android.app.ApplicationExitInfo.REASON_LOW_MEMORY && !wasForeground) continue
+                    if (ei.reason == ApplicationExitInfo.REASON_LOW_MEMORY && !wasForeground) continue
                     out.append(SimpleDateFormat("d MMM HH:mm", Locale.forLanguageTag("tr")).format(Date(ei.timestamp)))
                         .append(" · ").append(name)
                         .append(if (wasForeground) " (uygulama açıkken)" else " (arka planda)")

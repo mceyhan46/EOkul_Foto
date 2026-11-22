@@ -2,20 +2,21 @@ package com.eokul.studio
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -27,10 +28,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,10 +44,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.eokul.studio.core.RosterParser
 import com.eokul.studio.core.RosterParser.CaseMode
 import com.eokul.studio.core.RosterParser.Delimiter
+import java.nio.ByteBuffer
+import java.nio.charset.Charset
+import java.nio.charset.CodingErrorAction
 
 private fun delimLabel(d: Delimiter): String = when (d) {
     Delimiter.AUTO -> "Otomatik algıla"
@@ -75,7 +81,7 @@ fun ImportScreen(studio: StudioViewModel, classId: String?) {
 
     val filePicker = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
-    ) { uri: android.net.Uri? ->
+    ) { uri: Uri? ->
         if (uri != null) {
             try {
                 val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
@@ -201,7 +207,7 @@ fun ImportScreen(studio: StudioViewModel, classId: String?) {
                                     for ((m, label) in listOf(CaseMode.KEEP to "Olduğu gibi", CaseMode.TITLE to "Ad Soyad", CaseMode.UPPER to "AD SOYAD")) {
                                         FilterChip(
                                             selected = caseMode == m, onClick = { caseMode = m },
-                                            label = { Text(label, maxLines = 1, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center) },
+                                            label = { Text(label, maxLines = 1, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
                                             modifier = Modifier.weight(1f)
                                         )
                                     }
@@ -284,7 +290,7 @@ fun ImportScreen(studio: StudioViewModel, classId: String?) {
                                 for ((i, r) in valid.take(limit).withIndex()) {
                                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text(r.no, modifier = Modifier.width(88.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                        Text(r.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        Text(r.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                     if (i < limit - 1) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                 }
@@ -338,10 +344,10 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 private fun decodeText(bytes: ByteArray): String {
     return try {
         val dec = Charsets.UTF_8.newDecoder()
-            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
-            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
-        dec.decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        dec.decode(ByteBuffer.wrap(bytes)).toString()
     } catch (e: Exception) {
-        String(bytes, java.nio.charset.Charset.forName("windows-1254"))
+        String(bytes, Charset.forName("windows-1254"))
     }
 }

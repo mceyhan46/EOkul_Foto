@@ -5,8 +5,13 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.media.MediaActionSound
 import android.net.Uri
+import android.os.SystemClock
 import android.provider.Settings as AndroidSettings
+import android.util.Log
+import android.view.HapticFeedbackConstants
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,25 +28,10 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
-import androidx.compose.ui.input.pointer.pointerInput
-import android.media.MediaActionSound
-import android.view.HapticFeedbackConstants
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.FaceLandmark
-import com.eokul.studio.core.Score
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,10 +43,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -67,12 +62,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,7 +77,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.eokul.studio.core.Score
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceLandmark
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 private fun Context.findActivity(): ComponentActivity? {
     var c: Context? = this
@@ -128,7 +133,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
 
     // Anlık yüz tespiti / otomatik çekim durumu
     var live by remember { mutableStateOf<LiveFace?>(null) }
-    val liveRaw = remember { java.util.concurrent.atomic.AtomicReference<LiveFace?>(null) }
+    val liveRaw = remember { AtomicReference<LiveFace?>(null) }
     var progress by remember { mutableStateOf(0f) }
     val shutter = remember { AutoShutter(System.currentTimeMillis()) }
     var focusMark by remember { mutableStateOf<Offset?>(null) }
@@ -226,7 +231,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                         lastAnalysisMs = tNow
                         // Bu iş parçacığında ML Kit sonucu senkron beklenir: dinleyici/yürütücü yoktur, ekran kapanırken
                         // reddedilen görev (RejectedExecutionException) çökmesi olmaz; her durumda kare kapatılır.
-                        var bmpRef: android.graphics.Bitmap? = null
+                        var bmpRef: Bitmap? = null
                         try {
                             val bmp = proxy.toBitmap()
                             bmpRef = bmp
@@ -327,7 +332,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
         val shots = ArrayList<BurstPick.Shot>()
         val scores = ArrayList<Int>()   // kare puanları (shots ile aynı sıra)
         val oid = Ops.id(no)
-        val t0 = android.os.SystemClock.elapsedRealtime()
+        val t0 = SystemClock.elapsedRealtime()
         Ops.log("shutter", "id", oid, "lens", if (lensBack) "back" else "front", "burst", total, "hq", studio.settings.hqCapture)
         previewView.display?.let { imageCapture.targetRotation = it.rotation }
         try { sound.play(MediaActionSound.SHUTTER_CLICK) } catch (_: Throwable) { }
@@ -349,9 +354,9 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                 ei.saveAttributes()
                 val back = androidx.exifinterface.media.ExifInterface(best.absolutePath)
                     .getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, 1)
-                if (back != next) android.util.Log.w("EOkul", "Sağ-sol çevirme doğrulanamadı: beklenen $next, okunan $back")
+                if (back != next) Log.w("EOkul", "Sağ-sol çevirme doğrulanamadı: beklenen $next, okunan $back")
             } catch (e: Throwable) {
-                android.util.Log.w("EOkul", "Sağ-sol çevirme başarısız", e)
+                Log.w("EOkul", "Sağ-sol çevirme başarısız", e)
             }
         }
 
@@ -362,7 +367,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                 val best = try { BurstPick.bestOf(list, sc) } catch (e: Throwable) { Ops.error("bestOf", e); list[0].file }
                 Ops.log(
                     "capture", "id", oid, "frames", list.size, "chosen", list.indexOfFirst { it.file == best }.coerceAtLeast(0),
-                    "early", (list.size < total), "ms", android.os.SystemClock.elapsedRealtime() - t0, "flipped", flip
+                    "early", (list.size < total), "ms", SystemClock.elapsedRealtime() - t0, "flipped", flip
                 )
                 ContextCompat.getMainExecutor(ctx).execute {
                     capturing = false
@@ -396,13 +401,13 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                                 return@Thread
                             }
                             // Kareyi puanla: yeterince iyiyse kalan kareler çekilmez (hız); değilse sıradaki kare çekilir.
-                            val ts = android.os.SystemClock.elapsedRealtime()
+                            val ts = SystemClock.elapsedRealtime()
                             val d = try { BurstPick.scoreD(shot) } catch (e: Throwable) { Ops.error("score", e); BurstPick.Detail(-1) }
                             val sc = d.score
                             Ops.log(
                                 "frame", "id", oid, "i", i, "ms", ts - t0, "bytes", file.length(), "score", sc, "face", d.face,
                                 "eye", d.eye, "smile", d.smile, "light", d.light, "blur", d.blur, "bright", d.bright,
-                                "contrast", d.contrast, "scoreMs", android.os.SystemClock.elapsedRealtime() - ts
+                                "contrast", d.contrast, "scoreMs", SystemClock.elapsedRealtime() - ts
                             )
                             ContextCompat.getMainExecutor(ctx).execute {
                                 scores.add(sc)
@@ -661,7 +666,7 @@ fun CameraScreen(studio: StudioViewModel, classId: String, no: String) {
                             .clickable(enabled = shutterOk) { shoot() }
                     )
                     IconBtn(
-                        androidx.compose.material.icons.Icons.Filled.Refresh, "Kamerayı çevir",
+                        Icons.Filled.Refresh, "Kamerayı çevir",
                         {
                             torchOn = false
                             lensBack = !lensBack

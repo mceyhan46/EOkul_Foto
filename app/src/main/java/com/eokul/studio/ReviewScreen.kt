@@ -1,17 +1,7 @@
 package com.eokul.studio
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
-
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,35 +9,46 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
-import com.eokul.studio.core.Quality
-import com.eokul.studio.core.Score
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.activity.compose.BackHandler
+import com.eokul.studio.core.Quality
+import com.eokul.studio.core.Score
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private val Bg = DarkUi.Bg
 private val Warn = DarkUi.Warn
@@ -65,7 +66,7 @@ fun ReviewScreen(studio: StudioViewModel) {
     val student = cls?.students?.firstOrNull { it.no == cap.no }
     val s = cap.session
     var autoStopped by remember(cap) { mutableStateOf(false) }
-    val ctxR = androidx.compose.ui.platform.LocalContext.current
+    val ctxR = LocalContext.current
     val exifDir by produceState(-1, cap) {
         value = withContext(Dispatchers.IO) {
             try {
@@ -118,7 +119,7 @@ fun ReviewScreen(studio: StudioViewModel) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             if (actualSize) {
                                 // %100: çıktının her pikseli ekranda bir fiziksel piksel (e-Okul'da görüneceği gerçek boyut)
-                                val dens = androidx.compose.ui.platform.LocalDensity.current
+                                val dens = LocalDensity.current
                                 Image(
                                     bitmap = pb.asImageBitmap(),
                                     contentDescription = "Önizleme (gerçek boyut)",
@@ -215,7 +216,7 @@ fun ReviewScreen(studio: StudioViewModel) {
                 if (Math.abs(f0.roll) > 10f) hard("⚠ Baş yana eğik (${Math.abs(f0.roll).toInt()}°) — başı dik tutturun.")
                 if (Math.abs(f0.yaw) > 15f) hard("⚠ Yüz kameraya dönük değil (${Math.abs(f0.yaw).toInt()}°) — karşıdan çekin.")
             }
-            androidx.compose.runtime.LaunchedEffect(hardCount) { cap.warned = hardCount > 0 }
+            LaunchedEffect(hardCount) { cap.warned = hardCount > 0 }
             cap.hardCodes = hardCodes.joinToString(",")
             cap.softCodes = softCodes.joinToString(",")
             val f1 = s.faces.firstOrNull()
@@ -228,7 +229,7 @@ fun ReviewScreen(studio: StudioViewModel) {
                 )
                 com.eokul.studio.core.Burst.total(base, true, -1.0, -1.0, lightCode)
             } else -1
-            androidx.compose.runtime.LaunchedEffect(score) { if (score >= 0) cap.score = score }
+            LaunchedEffect(score) { if (score >= 0) cap.score = score }
             val kbNow = (preview?.second ?: 0) / 1024.0
             Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (score >= 0) {

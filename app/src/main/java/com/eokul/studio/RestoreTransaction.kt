@@ -4,6 +4,8 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.Properties
 
 /**
@@ -133,14 +135,14 @@ object RestoreTransaction {
             out.fd.sync()
         }
         try {
-            java.nio.file.Files.move(
+            Files.move(
                 tmp.toPath(), file.toPath(),
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING
             )
         } catch (_: Exception) {
             try {
-                java.nio.file.Files.move(tmp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
             } catch (e: Exception) {
                 tmp.delete()
                 throw IOException("Geri yükleme işlem günlüğü kaydedilemedi", e)
@@ -160,13 +162,13 @@ object RestoreTransaction {
 
     private fun replaceFile(source: File, target: File) {
         try {
-            java.nio.file.Files.move(
+            Files.move(
                 source.toPath(), target.toPath(),
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING
             )
         } catch (_: Exception) {
-            java.nio.file.Files.move(source.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
 
@@ -174,14 +176,14 @@ object RestoreTransaction {
         val tmp = File(target.parentFile, target.name + ".recovery.tmp")
         copySynced(source, tmp)
         try {
-            java.nio.file.Files.move(
+            Files.move(
                 tmp.toPath(), target.toPath(),
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING
             )
         } catch (_: Exception) {
             try {
-                java.nio.file.Files.move(tmp.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             } catch (e: Exception) {
                 throw IOException("Eski öğrenci listesi geri getirilemedi", e)
             }
