@@ -24,13 +24,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** Klasör seçiciyi açan işlev: seçici "Belgeler"de açılır; seçilen klasör kurulur (içinde EOkul_Studio açılır). */
+/**
+ * Klasör seçiciyi açan işlev. `pick(false)`: seçici "Belgeler"de açılır, seçilen klasörün içinde EOkul_Studio açılır.
+ * `pick(true)`: kullanıcı istediği klasörü seçer ve o klasör olduğu gibi kayıt klasörü olur.
+ */
 @Composable
-fun rememberRootPicker(studio: StudioViewModel): () -> Unit {
+fun rememberRootPicker(studio: StudioViewModel): (Boolean) -> Unit {
+    var direct by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
-        if (uri != null) studio.setRootFolder(uri)
+        if (uri != null) studio.setRootFolder(uri, direct)
     }
-    return { launcher.launch(studio.pickerHint) }
+    return { d ->
+        direct = d
+        launcher.launch(if (d) null else studio.pickerHint)
+    }
 }
 
 /**
@@ -39,7 +46,7 @@ fun rememberRootPicker(studio: StudioViewModel): () -> Unit {
  * [pick] klasör seçiciyi açar; seçici bu ekranın dışında (her zaman bileşimde) durur, böylece sonuç kaybolmaz.
  */
 @Composable
-fun RootOnboarding(studio: StudioViewModel, pick: () -> Unit) {
+fun RootOnboarding(studio: StudioViewModel, pick: (Boolean) -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val canRoot = studio.canUseRootMode
     val fresh = studio.rootState == RootRules.State.NOT_SET
@@ -102,12 +109,13 @@ fun RootOnboarding(studio: StudioViewModel, pick: () -> Unit) {
                 onClick = {
                     if (canRoot) studio.setupRootDirectly { intent ->
                         try { ctx.startActivity(intent) } catch (_: Exception) { studio.toast("İzin sayfası açılamadı") }
-                    } else pick()
+                    } else pick(false)
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) { Text(if (canRoot) "İzin Ver ve Başla" else "Klasör Seç", style = MaterialTheme.typography.titleMedium) }
             Spacer(Modifier.size(8.dp))
-            if (canRoot) TextButton(onClick = pick) { Text("İzin vermeden devam et (Belgeler klasörü)") }
+            if (canRoot) TextButton(onClick = { pick(false) }) { Text("İzin vermeden devam et (Belgeler klasörü)") }
+            TextButton(onClick = { pick(true) }) { Text("Başka bir klasör seç…") }
             TextButton(onClick = { studio.rootSetupRequested = false }) { Text("Şimdi Değil") }
         }
     }
@@ -147,5 +155,89 @@ fun RootStatusCard(studio: StudioViewModel) {
             Spacer(Modifier.size(6.dp))
             Button(onClick = { studio.openRootSetup() }) { Text(if (studio.rootState == RootRules.State.NOT_SET) "📂 Klasörü Kur" else "📂 Klasörü Yeniden Seç") }
         }
+    }
+}
+
+
+/** Seçenek satırı: başlık + açıklama, dokununca [onClick]. */
+@Composable
+private fun ChoiceCard(title: String, text: String, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = softColors().container)
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(title, fontWeight = FontWeight.Bold, color = softColors().onContainer)
+            Text(text, style = MaterialTheme.typography.bodySmall, color = softColors().onContainer)
+        }
+    }
+}
+
+/**
+ * "Klasörü Değiştir" pencereleri: (1) konum seçimi — kök dizin, Belgeler veya istenen herhangi bir klasör;
+ * (2) seçilen klasörde bulunanların özeti ve "bu klasörü kullan / dosyaları kopyala / vazgeç" kararı.
+ */
+@Composable
+fun RootChangeDialogs(studio: StudioViewModel, pick: (Boolean) -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    if (studio.rootChooserOpen) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { studio.rootChooserOpen = false },
+            title = { Text("Kayıt klasörü nerede olsun?") },
+            text = {
+                Column {
+                    if (studio.canUseRootMode) ChoiceCard(
+                        "Telefonun kök dizini", "Dahili depolama/${RootRules.DEFAULT_SUB} — bir kez “Tüm dosyalara erişim” izni gerekir"
+                    ) {
+                        studio.setupRootDirectly { intent ->
+                            try { ctx.startActivity(intent) } catch (_: Exception) { studio.toast("İzin sayfası açılamadı") }
+                        }
+                        studio.rootChooserOpen = false
+                    }
+                    ChoiceCard("Belgeler", "Seçtiğiniz klasörün içinde ${RootRules.DEFAULT_SUB} açılır") { pick(false) }
+                    ChoiceCard(
+                        "Başka klasör seç…",
+                        "Daha önce kullandığınız veya istediğiniz herhangi bir klasör; fotoğraflar doğrudan o klasöre kaydedilir"
+                    ) { pick(true) }
+                    Text(
+                        "Mevcut dosyalarınız silinmez; seçimden sonra ne yapılacağını siz belirlersiniz.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { studio.rootChooserOpen = false }) { Text("Kapat") } }
+        )
+    }
+    studio.pendingRootChange?.let { ch ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { studio.cancelRootChange() },
+            title = { Text("Bu klasör kullanılsın mı?") },
+            text = {
+                Column {
+                    Text(ch.label, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.size(6.dp))
+                    Text(RootRules.foundSummary(ch.found), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        "“Bu Klasörü Kullan”: klasördeki dosyalar olduğu gibi kullanılır, orijinaller öğrencilere bağlanır.\n" +
+                            "“Dosyaları Kopyala”: eski klasördeki orijinaller, yedekler ve eksik fotoğraflar buraya da kopyalanır. Eski dosyalar silinmez.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                    Button(onClick = { studio.confirmRootChange(copy = ch.found.isEmpty) }) {
+                        Text(if (ch.found.isEmpty) "Kopyala ve Kullan" else "Bu Klasörü Kullan")
+                    }
+                    TextButton(onClick = { studio.confirmRootChange(copy = !ch.found.isEmpty) }) {
+                        Text(if (ch.found.isEmpty) "Kopyalamadan Kullan" else "Dosyaları Kopyala")
+                    }
+                }
+            },
+            dismissButton = { TextButton(onClick = { studio.cancelRootChange() }) { Text("Vazgeç") } }
+        )
     }
 }

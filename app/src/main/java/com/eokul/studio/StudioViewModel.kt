@@ -143,6 +143,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             else {
                 rootSetupBusy = false
                 rootSetupNote = "İzin verilmedi. “İzin Ver ve Başla”ya tekrar dokunup anahtarı açın veya Belgeler klasörünü seçin."
+                if (settings.rootUri != null) say("İzin verilmedi; kayıt klasörü değişmedi")
             }
         } else refreshRoot()
         if (PinLock.shouldLock(settings.pinHash != null, backgroundedAt, System.currentTimeMillis())) locked = true
@@ -388,7 +389,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Kullanıcının seçtiği klasörü kurar (içinde EOkul_Studio açar); eski izni bırakır. */
-    fun setRootFolder(uri: Uri) = applyRootSetup { rootFolder.setup(uri) }
+    fun setRootFolder(uri: Uri, direct: Boolean = false) = applyRootSetup { rootFolder.setup(uri, direct) }
 
     /** Kök dizin kipi: izin varsa hemen kurar; yoksa [launchSettings] ile izin sayfasını açar ve dönüşte kurulumu tamamlar. */
     fun setupRootDirectly(launchSettings: (android.content.Intent) -> Unit) {
@@ -405,6 +406,17 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     /** Bu telefonda kök dizin kipi sunulabilir mi? */
     val canUseRootMode: Boolean get() = rootFolder.canUseRoot()
 
+    /** "Klasörü Değiştir" seçenek penceresi açık mı? */
+    var rootChooserOpen by mutableStateOf(false)
+
+    /** Yeni klasör seçildi, kullanıcının onayı bekleniyor (eski klasör ayarda duruyor). */
+    class RootChange(val encoded: String, val label: String, val found: RootRules.Found)
+
+    var pendingRootChange by mutableStateOf<RootChange?>(null)
+        private set
+
+    private val rootMigration by lazy { RootMigration(ctx) }
+
     private fun applyRootSetup(setup: () -> RootFolder.Setup) {
         viewModelScope.launch {
             val old = settings.rootUri
@@ -415,20 +427,93 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 Ops.error("root_setup", it)
                 rootSetupBusy = false
                 rootSetupNote = it.message ?: "Klasör kurulamadı"
+                if (old != null) say("⚠ ${rootSetupNote}")
                 return@launch
             }
             rootSetupBusy = false
-            if (old != null && RootRules.decode(old).base != RootRules.decode(done.encoded).base) {
-                withContext(Dispatchers.IO) { rootFolder.release(old) }
+            if (old == done.encoded) {
+                rootSetupRequested = false
+                say("Bu klasör zaten kullanılıyor")
+                return@launch
             }
-            SettingsState.update(settings.copy(rootUri = done.encoded))
-            rootSetupRequested = false
-            refreshRoot()
+            if (old != null && rootState != RootRules.State.NOT_SET) {
+                // Klasör değişiyor: ne bulunduğunu göster, kullanıcı karar versin (ayar henüz değişmedi)
+                val snap = classes.toList()
+                val (label, found) = withContext(Dispatchers.IO) {
+                    rootFolder.label(done.encoded).orEmpty() to rootMigration.inspect(Uri.parse(done.encoded), snap)
+                }
+                rootSetupRequested = false
+                rootChooserOpen = false
+                pendingRootChange = RootChange(done.encoded, label, found)
+                return@launch
+            }
+            commitRoot(done.encoded, old)
             val where = withContext(Dispatchers.IO) { rootFolder.label(done.encoded) }
             say(
                 if (done.reused) "✓ Mevcut klasör bulundu: $where. Yedek veya klasör içeriğinden devam edebilirsiniz."
                 else "✓ Kayıt klasörü hazır: $where"
             )
+        }
+    }
+
+    /** Yeni klasörü ayara işler, eski izni (başka bir yerse) bırakır ve durumu yeniler. */
+    private suspend fun commitRoot(encoded: String, old: String?) {
+        SettingsState.update(settings.copy(rootUri = encoded))
+        if (old != null && RootRules.decode(old).base != RootRules.decode(encoded).base) {
+            withContext(Dispatchers.IO) { rootFolder.release(old) }
+        }
+        rootSetupRequested = false
+        rootChooserOpen = false
+        refreshRoot()
+    }
+
+    /**
+     * Klasör değişikliğini onaylar. [copy] true ise eski klasördeki orijinaller ve yedekler yenisine kopyalanır, eksik
+     * fotoğraflar yazılır; her durumda yeni klasörde bulunan orijinaller öğrencilere yeniden bağlanır. Eski dosyalar silinmez.
+     */
+    fun confirmRootChange(copy: Boolean) {
+        val change = pendingRootChange ?: return
+        val old = settings.rootUri
+        pendingRootChange = null
+        viewModelScope.launch {
+            rootSetupBusy = true
+            say(if (copy) "Dosyalar yeni klasöre kopyalanıyor…" else "Klasör bağlanıyor…")
+            val snap = classes.toList()
+            val newRoot = Uri.parse(change.encoded)
+            val (report, relinked, wrote) = withContext(Dispatchers.IO) {
+                saveMutex.withLock {
+                    val rep = if (copy && old != null) rootMigration.copy(Uri.parse(old), newRoot, snap) else null
+                    val uris = HashMap<Pair<String, String>, String>(rootMigration.relink(newRoot, snap))
+                    rep?.uris?.let { uris.putAll(it) }
+                    val w = if (copy) rewriteMissingFolderFiles(newRoot, snap) else 0 to 0
+                    Triple(rep, uris, w)
+                }
+            }
+            if (relinked.isNotEmpty()) {
+                replaceClasses(OriginalsRules.applyUris(classes.toList(), relinked))
+                rosterVersion.incrementAndGet()
+            }
+            rootSetupBusy = false
+            commitRoot(change.encoded, old)
+            Ops.log("op", "name", "root_change", "ok", (report?.failed ?: 0) == 0, "copy", copy, "linked", relinked.size)
+            val notes = ArrayList<String>()
+            if (relinked.isNotEmpty()) notes.add("${relinked.size} orijinal bağlandı")
+            if (report != null && report.copiedOriginals > 0) notes.add("${report.copiedOriginals} orijinal kopyalandı")
+            if (report != null && report.copiedBackups > 0) notes.add("${report.copiedBackups} yedek kopyalandı")
+            if (wrote.first > 0) notes.add("${wrote.first} fotoğraf yazıldı")
+            val failed = (report?.failed ?: 0) + wrote.second
+            if (failed > 0) notes.add("$failed dosya aktarılamadı")
+            say("✓ Kayıt klasörü: ${change.label}" + if (notes.isEmpty()) "" else "\n" + notes.joinToString(" · "))
+        }
+    }
+
+    /** Klasör değişikliğinden vazgeçilir; yeni alınan izin (eskisinden farklıysa) bırakılır. */
+    fun cancelRootChange() {
+        val change = pendingRootChange ?: return
+        pendingRootChange = null
+        val old = settings.rootUri
+        if (old == null || RootRules.decode(old).base != RootRules.decode(change.encoded).base) {
+            viewModelScope.launch { withContext(Dispatchers.IO) { rootFolder.release(change.encoded) } }
         }
     }
 

@@ -243,6 +243,13 @@ object Output {
         null
     }
 
+    /** Klasördeki dosyalar (ad, adres); klasör yoksa null. Yalnızca okur. */
+    fun listFiles(ctx: Context, tree: Uri, segments: List<String>): List<Pair<String, Uri>>? = try {
+        dirFor(ctx, tree, segments, false)?.listFiles()?.filter { it.isFile }?.mapNotNull { f -> f.name?.let { it to f.uri } }
+    } catch (e: Exception) {
+        null
+    }
+
     /** Kayıt klasörü altındaki bir klasörü içindekilerle birlikte siler; başarılıysa (veya zaten yoksa) true. */
     fun deleteDir(ctx: Context, tree: Uri, parent: List<String>, name: String): Boolean {
         return try {

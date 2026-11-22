@@ -170,6 +170,7 @@ fun AppRoot(vm: AppViewModel, studio: StudioViewModel) {
     // Klasör seçici her zaman bileşimde durur: kurulum ekranı kapansa bile seçim sonucu kaybolmaz
     val pickRoot = rememberRootPicker(studio)
     Surface(modifier = Modifier.fillMaxSize(), color = rootColor) {
+        if (!studio.locked) RootChangeDialogs(studio, pickRoot)
         if (!studio.locked && studio.rootSetupRequested) {
             Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) { RootOnboarding(studio, pickRoot) }
             return@Surface

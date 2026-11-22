@@ -73,4 +73,23 @@ object RootRules {
         State.READ_ONLY -> "Kayıt klasörüne yazılamıyor (SD kart çıkarılmış olabilir)"
         State.READY -> null
     }
+
+    /** Yeni klasörde bulunanlar: sınıf klasörü, 133x171 fotoğraf, orijinal ve yedek sayıları. */
+    class Found(val classFolders: Int, val photos: Int, val originals: Int, val backups: Int) {
+        val isEmpty: Boolean get() = classFolders == 0 && photos == 0 && originals == 0 && backups == 0
+    }
+
+    /** Klasör değiştirirken kullanıcıya gösterilen bulgu özeti. */
+    fun foundSummary(f: Found): String {
+        if (f.isEmpty) return "Bu klasör boş görünüyor; mevcut dosyalarınızı buraya kopyalayabilirsiniz."
+        val parts = ArrayList<String>()
+        if (f.classFolders > 0) parts.add("${f.classFolders} sınıf klasörü")
+        if (f.photos > 0) parts.add("${f.photos} fotoğraf")
+        if (f.originals > 0) parts.add("${f.originals} orijinal")
+        if (f.backups > 0) parts.add("${f.backups} yedek")
+        return "Bu klasörde bulundu: " + parts.joinToString(", ") + "."
+    }
+
+    /** Öğrenci dosya adı ("12345-Ad Soyad.jpg") bu numaraya mı ait? */
+    fun belongsTo(no: String, fileName: String): Boolean = fileName.startsWith("$no-") && !fileName.startsWith(".")
 }

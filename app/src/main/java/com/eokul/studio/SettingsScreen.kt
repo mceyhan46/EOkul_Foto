@@ -161,9 +161,11 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             if (studio.rootState != RootRules.State.NOT_SET) Text("⚠ $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
         Spacer(Modifier.size(4.dp))
-        OutlinedButton(onClick = { studio.openRootSetup() }) { Text(if (studio.rootState == RootRules.State.NOT_SET) "Klasörü Kur" else "Klasörü Değiştir") }
+        OutlinedButton(onClick = {
+            if (studio.rootState == RootRules.State.NOT_SET) studio.openRootSetup() else studio.rootChooserOpen = true
+        }) { Text(if (studio.rootState == RootRules.State.NOT_SET) "Klasörü Kur" else "Klasörü Değiştir") }
         Text(
-            "Yapı: Sınıf/12345-Ad Soyad.jpg · Sınıf/Orijinaller/12345-Ad Soyad.jpg. Klasörü değiştirirseniz mevcut dosyalar eski yerinde kalır.",
+            "Yapı: Sınıf/12345-Ad Soyad.jpg · Sınıf/Orijinaller/12345-Ad Soyad.jpg. Klasörü değiştirirken istediğiniz konumu seçebilir, eski dosyaları isterseniz yeni klasöre kopyalayabilirsiniz.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.size(8.dp))

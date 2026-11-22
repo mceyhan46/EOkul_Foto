@@ -70,4 +70,18 @@ class RootRulesTest {
         assertEquals("/storage/1A2B-3C4D/Okul", RootRules.fileLabel("/storage/1A2B-3C4D/Okul"))
         assertEquals("Kayıt klasörü", RootRules.fileLabel(null))
     }
+
+    @Test fun bulguOzeti() {
+        assertTrue(RootRules.Found(0, 0, 0, 0).isEmpty)
+        assertTrue(RootRules.foundSummary(RootRules.Found(0, 0, 0, 0)).contains("boş"))
+        val t = RootRules.foundSummary(RootRules.Found(2, 40, 38, 1))
+        assertEquals("Bu klasörde bulundu: 2 sınıf klasörü, 40 fotoğraf, 38 orijinal, 1 yedek.", t)
+        assertEquals("Bu klasörde bulundu: 3 fotoğraf.", RootRules.foundSummary(RootRules.Found(0, 3, 0, 0)))
+    }
+
+    @Test fun dosyaOgrenciyeAitMi() {
+        assertTrue(RootRules.belongsTo("123", "123-Ali Veli.jpg"))
+        assertFalse(RootRules.belongsTo("12", "123-Ali Veli.jpg"))
+        assertFalse(RootRules.belongsTo("123", ".tmp-123-Ali.jpg"))
+    }
 }

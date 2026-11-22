@@ -21,8 +21,11 @@ class RootFolder(private val ctx: Context) {
     /** [encoded] ayarda saklanacak değerdir; [reused] seçilen yerde daha önce kullanılmış dosyalar bulunduysa true. */
     class Setup(val encoded: String, val reused: Boolean)
 
-    /** Seçilen klasörü kurar; sorun varsa Türkçe açıklamalı IOException fırlatır. */
-    fun setup(picked: Uri): Setup {
+    /**
+     * Seçilen klasörü kurar; sorun varsa Türkçe açıklamalı IOException fırlatır. [direct] true ise kullanıcının seçtiği
+     * klasör olduğu gibi kayıt klasörü olur (içinde EOkul_Studio açılmaz).
+     */
+    fun setup(picked: Uri, direct: Boolean = false): Setup {
         try {
             ctx.contentResolver.takePersistableUriPermission(
                 picked, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -34,6 +37,11 @@ class RootFolder(private val ctx: Context) {
         if (base == null || !base.isDirectory) throw IOException("Klasöre erişilemiyor; başka bir klasör seçin")
         if (!base.canWrite()) throw IOException("Bu klasöre yazılamıyor; başka bir klasör seçin")
 
+        if (direct) {
+            val reused = base.listFiles().isNotEmpty()
+            probe(base)
+            return Setup(RootRules.encode(picked.toString(), null), reused)
+        }
         val children = base.listFiles()
         val existingSub = children.firstOrNull { it.isDirectory && it.name.equals(RootRules.DEFAULT_SUB, ignoreCase = true) }
         // Eski kurulum: kullanıcı doğrudan eski kayıt klasörünü seçtiyse (içinde Yedek/ veya Orijinaller/ var) olduğu gibi kullanılır.
