@@ -930,7 +930,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 saveMutex.withLock {
                 val tb = android.os.SystemClock.elapsedRealtime()
                 val snap = stableRosterSnapshot()
-                val name = backups.write(backupStorage(root), snap, settings.backupPrefix)
+                val origs = if (settings.backupOriginals) withContext(Dispatchers.IO) { originalSources(root, snap) } else emptyList()
+                val name = backups.write(backupStorage(root), snap, settings.backupPrefix, originals = origs)
                 Ops.log(
                     "op", "name", "backup", "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tb, "n", name.photos,
                     "captured", name.captured, "retake", snap.sumOf { c -> c.students.count { it.retake } },
@@ -938,7 +939,9 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 )
                 SettingsState.update(settings.copy(lastBackupMs = System.currentTimeMillis()))
                 say("✓ Yedek alındı ve doğrulandı: ${name.name}\n${name.photos} fotoğraf · ${name.captured} çekilmiş öğrenci · ${snap.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · ${snap.sumOf { c -> c.students.count { it.retake } }} tekrar işaretli.\n" +
-                    "Dosya kayıt klasörünüzdeki \"Yedek\" klasöründe durur; uygulamayı silseniz de kalır. Tam çözünürlüklü orijinaller yedeğe girmez, kayıt klasöründe kalır.")
+                    "Dosya kayıt klasörünüzdeki \"Yedek\" klasöründe durur; uygulamayı silseniz de kalır. " +
+                    (if (settings.backupOriginals) "${name.originals} orijinal fotoğraf da yedeğe eklendi (Kırpmayı düzenle geri yüklemede çalışır)."
+                    else "Orijinal fotoğraflar yedeğe eklenmedi (Ayarlar'dan açılabilir)."))
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -991,11 +994,13 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     "boxes", restored.classes.sumOf { c -> c.students.count { it.box != null } }
                 )
                 if (safety != null) rootUri?.let { pruneSafetyBackups(it) }
+                val folderNote = materializeRestored(restored)
                 say(
                     "✓ ${restored.classes.size} sınıf geri yüklendi · ${restored.classes.sumOf { c -> c.students.count { it.captured } }} çekilmiş öğrenci · " +
                         "${restored.classes.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · " +
                         "${restored.classes.sumOf { c -> c.students.count { it.retake } }} tekrar işaretli" +
                         (if (restored.skippedPhotos > 0) " (${restored.skippedPhotos} bozuk fotoğraf atlandı)" else "") +
+                        folderNote +
                         (if (safety != null) "\nÖnceki verinizin güvenlik kopyası: $safety" else "")
                 )
                 }
@@ -1061,39 +1066,107 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val root = requireRoot() ?: return
         val snap = classes.toList()
         viewModelScope.launch {
-            val (fixed, lost) = withContext(Dispatchers.IO) {
-                saveMutex.withLock {
-                    var fixed = 0
-                    var lost = 0
-                    for (c in snap) {
-                        val dirName = RosterParser.sanitizeFileName(c.name)
-                        val have = (Output.listNames(ctx, root, listOf(dirName)) ?: emptyList()).toHashSet()
-                        for ((s, stem) in DataAudit.missingInFolder(c, have)) {
-                            val priv = Naming.privatePhoto(ctx, c.id, s.no)
-                            if (!priv.exists() || priv.length() <= 0L) { lost++; continue }
-                            try {
-                                Output.writeStream(ctx, root, listOf(dirName), "$stem.jpg", "image/jpeg") { out ->
-                                    priv.inputStream().use { it.copyTo(out) }
-                                }
-                                fixed++
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Throwable) {
-                                Ops.error("repair", e)
-                                lost++
-                            }
-                        }
-                    }
-                    fixed to lost
-                }
-            }
+            val (fixed, lost) = withContext(Dispatchers.IO) { saveMutex.withLock { rewriteMissingFolderFiles(root, snap) } }
             Ops.log("op", "name", "repair", "ok", lost == 0, "n", fixed, "err", if (lost > 0) "lost=$lost" else null)
             say(
                 if (fixed == 0 && lost == 0) "Kayıt klasöründe eksik fotoğraf yok."
                 else "✓ $fixed fotoğraf kayıt klasörüne yeniden yazıldı." + (if (lost > 0) " $lost öğrenci için kopya bulunamadı; yeniden çekin." else "") +
-                    " Orijinaller geri getirilemez; “Kırpmayı düzenle” için yeniden çekin."
+                    " Orijinaller bu işlemle geri gelmez; yedekten geri yüklemek veya yeniden çekmek gerekir."
             )
         }
+    }
+
+    /** Kilit almadan çalışır (çağıran [saveMutex]'i tutmalıdır). (yazılan, bulunamayan/yazılamayan) döndürür. */
+    private fun rewriteMissingFolderFiles(root: Uri, snap: List<SchoolClass>): Pair<Int, Int> {
+        var fixed = 0
+        var lost = 0
+        for (c in snap) {
+            val dirName = RosterParser.sanitizeFileName(c.name)
+            val have = (Output.listNames(ctx, root, listOf(dirName)) ?: emptyList()).toHashSet()
+            for ((s, stem) in DataAudit.missingInFolder(c, have)) {
+                val priv = Naming.privatePhoto(ctx, c.id, s.no)
+                if (!priv.exists() || priv.length() <= 0L) { lost++; continue }
+                try {
+                    Output.writeStream(ctx, root, listOf(dirName), "$stem.jpg", "image/jpeg") { out ->
+                        priv.inputStream().use { it.copyTo(out) }
+                    }
+                    fixed++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    Ops.error("repair", e)
+                    lost++
+                }
+            }
+        }
+        return fixed to lost
+    }
+
+    /**
+     * Yedeğe eklenecek orijinaller: her çekilmiş öğrenci için kayıtlı adres, yoksa kayıt klasöründeki `Sınıf/Orijinaller/` içinde
+     * dosya adıyla aranır. Açılamayanlar atlanır (yedek yine alınır).
+     */
+    private fun originalSources(root: Uri, snap: List<SchoolClass>): List<OriginalFile> {
+        val out = ArrayList<OriginalFile>()
+        for (c in snap) for (st in c.students) {
+            if (!st.captured) continue
+            val uri: Uri = st.origUri?.let { Uri.parse(it) }?.takeIf { Output.exists(ctx, it) }
+                ?: Output.findFile(ctx, root, listOf(OriginalsRules.classDir(c), ORIGINALS_DIR), OriginalsRules.stem(st), "${st.no}-")
+                ?: continue
+            val name = OriginalsRules.fileName(st, Output.displayName(ctx, uri))
+            out.add(OriginalFile(OriginalsRules.item(c, st, name)) { ctx.contentResolver.openInputStream(uri) })
+        }
+        return out
+    }
+
+    /**
+     * Geri yüklemeden sonra kayıt klasörünü yedekle uyumlu hâle getirir: yedekteki orijinalleri `Sınıf/Orijinaller/` içine yazar
+     * (öğrencilerin adreslerini günceller) ve klasörde eksik 133x171 fotoğrafları yeniden yazar. Kilit çağıranda tutulur.
+     * Kullanıcıya eklenecek kısa not döndürür.
+     */
+    private suspend fun materializeRestored(restored: RestoreOutcome): String {
+        val root = rootUri?.takeIf { rootState == RootRules.State.READY }
+        val notes = ArrayList<String>()
+        if (root == null) {
+            restored.originals.forEach { it.file.delete() }
+            File(ctx.filesDir, BackupService.ORIGINALS_STAGE).deleteRecursively()
+            return "\n⚠ Kayıt klasörü kullanılamadığı için dosyalar klasöre yazılmadı; klasörü kurduktan sonra “Eksik Klasör Dosyalarını Onar”ı çalıştırın." +
+                if (restored.originals.isNotEmpty()) " Orijinaller bu geri yüklemede klasöre aktarılamadı; yedeği klasör kurulduktan sonra yeniden geri yükleyin." else ""
+        }
+        say("Kayıt klasörü güncelleniyor… (orijinaller ve fotoğraflar yazılıyor)")
+        val (wroteOrig, failedOrig, uris) = withContext(Dispatchers.IO) {
+            var ok = 0
+            var bad = 0
+            val map = HashMap<Pair<String, String>, String>()
+            for (o in restored.originals) {
+                try {
+                    val u = Output.writeStream(ctx, root, listOf(o.item.classDir, ORIGINALS_DIR), o.item.file, OriginalsRules.mime(o.item.file)) { out ->
+                        o.file.inputStream().use { it.copyTo(out) }
+                    }
+                    map[o.item.classId to o.item.no] = u.toString()
+                    ok++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    Ops.error("restore_original", e)
+                    bad++
+                } finally {
+                    o.file.delete()
+                }
+            }
+            File(ctx.filesDir, BackupService.ORIGINALS_STAGE).deleteRecursively()
+            Triple(ok, bad, map)
+        }
+        if (uris.isNotEmpty()) {
+            replaceClasses(OriginalsRules.applyUris(classes.toList(), uris))
+            rosterVersion.incrementAndGet()
+        }
+        val (fixed, lost) = withContext(Dispatchers.IO) { rewriteMissingFolderFiles(root, classes.toList()) }
+        Ops.log("op", "name", "restore_folder", "ok", failedOrig == 0 && lost == 0, "orig", wroteOrig, "files", fixed)
+        if (wroteOrig > 0 || restored.originals.isNotEmpty()) notes.add("$wroteOrig orijinal klasöre yazıldı" + if (failedOrig > 0) " ($failedOrig yazılamadı)" else "")
+        if (fixed > 0) notes.add("$fixed fotoğraf sınıf klasörlerine yazıldı")
+        if (lost > 0) notes.add("$lost öğrenci için fotoğraf kopyası bulunamadı")
+        return if (notes.isEmpty()) "" else "\n" + notes.joinToString(" · ")
     }
 
     /** Adı değişen öğrencilerin kayıt klasöründeki dosya adlarını güncel ad soyada göre yeniden adlandırır. */

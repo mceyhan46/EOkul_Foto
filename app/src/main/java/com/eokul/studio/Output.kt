@@ -311,6 +311,9 @@ object Output {
         }
     }
 
+    /** Dosyanın görünen adı (uzantılı); alınamazsa null. */
+    fun displayName(ctx: Context, uri: Uri): String? = try { docFor(ctx, uri)?.name } catch (e: Exception) { null }
+
     /** Uri gerçekten açılabiliyor mu? (dosya taşınmış/silinmişse false) */
     fun exists(ctx: Context, uri: Uri): Boolean = try {
         ctx.contentResolver.openInputStream(uri)?.use { true } ?: false

@@ -77,6 +77,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
     var accScore by remember { mutableStateOf(cur.autoAcceptScore.toFloat()) }
     var accDelay by remember { mutableStateOf(cur.autoAcceptDelayMs.toFloat()) }
     var keepOrig by remember { mutableStateOf(cur.keepOriginals) }
+    var backupOrig by remember { mutableStateOf(cur.backupOriginals) }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun build(): Settings? {
@@ -109,6 +110,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             autoTol = (autoTol * 100.0).roundToInt() / 100.0,
             autoHoldMs = ((autoHold / 100f).roundToInt() * 100).coerceIn(400, 4000),
             keepOriginals = keepOrig,
+            backupOriginals = backupOrig,
             smartShot = smart,
             flipCapture = flipCap,
             flipFront = flipFront,
@@ -173,6 +175,14 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             Switch(checked = keepOrig, onCheckedChange = { keepOrig = it })
             Text("  Tam çözünürlüklü orijinali sakla", style = MaterialTheme.typography.bodyMedium)
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = backupOrig, onCheckedChange = { backupOrig = it })
+            Text("  Yedeğe orijinalleri de ekle", style = MaterialTheme.typography.bodyMedium)
+        }
+        Text(
+            "Açıkken yedek dosyası daha büyük olur (öğrenci başına yaklaşık 0,3–0,9 MB) ancak başka bir klasöre/telefona geri yüklemede “Kırpmayı düzenle” çalışır.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
         }
         SettingsCard("Çekim", "Akıllı çekim, otomatik çekim ve hızlı onay") {

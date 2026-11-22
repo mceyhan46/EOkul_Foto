@@ -40,11 +40,13 @@ fun rememberRestoreFlow(studio: StudioViewModel): () -> Unit {
                 Text(
                     (if (ri != null)
                         "Yedekte: ${ri.classes} sınıf · ${ri.students} öğrenci (${ri.captured} fotoğraflı · ${ri.retake} tekrar işaretli)" +
+                            (if (ri.originals > 0) " · ${ri.originals} orijinal" else " · orijinal yok") +
                             (ri.createdMs?.let { " · " + dateFmt.format(java.util.Date(it)) } ?: "") +
                             (if (ri.appVersion.isNotBlank()) " · sürüm ${ri.appVersion}" else "") + "\n"
                     else "") +
                         "Şu an uygulamada: ${studio.classes.size} sınıf · ${studio.classes.sumOf { it.students.size }} öğrenci\n\n" +
                         "Uygulamadaki tüm sınıf listeleri ve küçük fotoğraflar yedekteki ile DEĞİŞTİRİLİR. " +
+                        "Yedekteki orijinaller ve fotoğraflar kayıt klasöründeki sınıf klasörlerine de yazılır. " +
                         "Değiştirmeden önce mevcut verinin ayrı bir kopyası (Yedek/Onc_….zip) kayıt klasörüne otomatik alınır."
                 )
             },

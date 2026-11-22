@@ -33,16 +33,35 @@ public final class BackupZip {
         }
     }
 
+    /** ZIP'e eklenen ek girdi (ör. kayıt klasöründeki orijinal fotoğraf): ad ve içeriği açan işlev. */
+    public interface Extra {
+        String name();
+
+        InputStream open() throws IOException;
+    }
+
     /** Beklenen girdi adları: manifest, roster ve her fotoğrafın [base]'e göre adı. */
     public static Set<String> expectedNames(File base, List<File> photos) throws IOException {
+        return expectedNames(base, photos, java.util.Collections.<Extra>emptyList());
+    }
+
+    /** Beklenen girdi adları: manifest, roster, fotoğraflar ve ek girdiler. */
+    public static Set<String> expectedNames(File base, List<File> photos, List<? extends Extra> extras) throws IOException {
         Set<String> names = new HashSet<>();
         names.add(MANIFEST);
         names.add(ROSTER);
         for (File f : photos) names.add(BackupPaths.entryName(base, f));
+        for (Extra e : extras) names.add(e.name());
         return names;
     }
 
     public static void write(OutputStream out, byte[] manifest, byte[] roster, File base, List<File> photos) throws IOException {
+        write(out, manifest, roster, base, photos, java.util.Collections.<Extra>emptyList());
+    }
+
+    public static void write(
+        OutputStream out, byte[] manifest, byte[] roster, File base, List<File> photos, List<? extends Extra> extras
+    ) throws IOException {
         try (ZipOutputStream zip = new ZipOutputStream(out)) {
             put(zip, MANIFEST, manifest);
             put(zip, ROSTER, roster);
@@ -50,6 +69,16 @@ public final class BackupZip {
             for (File f : photos) {
                 zip.putNextEntry(new ZipEntry(BackupPaths.entryName(base, f)));
                 try (InputStream in = new FileInputStream(f)) {
+                    int n;
+                    while ((n = in.read(buf)) >= 0) zip.write(buf, 0, n);
+                }
+                zip.closeEntry();
+            }
+            for (Extra e : extras) {
+                if (!BackupPaths.isSafeEntryName(e.name())) throw new IOException("Güvensiz ZIP girdi adı: " + e.name());
+                zip.putNextEntry(new ZipEntry(e.name()));
+                try (InputStream in = e.open()) {
+                    if (in == null) throw new IOException("Dosya açılamadı: " + e.name());
                     int n;
                     while ((n = in.read(buf)) >= 0) zip.write(buf, 0, n);
                 }
