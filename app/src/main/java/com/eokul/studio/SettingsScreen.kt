@@ -407,6 +407,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.size(12.dp))
+        BackupProgressCard(studio)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AppButton("Yedekle", onClick = { studio.backup() }, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
             AppButton(

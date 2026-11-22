@@ -106,6 +106,7 @@ fun HomeScreen(studio: StudioViewModel) {
                 }
 
                 RootStatusCard(studio)
+                BackupProgressCard(studio)
 
                 if (studio.classes.isNotEmpty()) SummaryCard(studio)
 
@@ -418,7 +419,7 @@ private fun HomeDrawer(studio: StudioViewModel, closeThen: (() -> Unit) -> Unit,
             DrawerItem("Çoklu Sınıf Listesi (Excel)", Icons.AutoMirrored.Filled.List) { closeThen { studio.navigate(Screen.MultiImport) } }
             DrawerItem("Toplu Kırpma", Icons.Filled.Edit) { closeThen { studio.navigate(Screen.Batch) } }
             DrawerGroup("Yedek Ve Veri")
-            DrawerItem("Yedekle", Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring) { closeThen { studio.backup() } }
+            DrawerItem("Yedekle", Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring && studio.backupProgress == null) { closeThen { studio.backup() } }
             DrawerItem("Yedekten Geri Yükle", Icons.Filled.Refresh, enabled = !studio.isRestoring) { closeThen { startRestore() } }
             DrawerItem("Tüm Sınıflar ZIP (Klasörlü + Rapor)", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportAllFoldersZip() } }
             DrawerItem("Sınıfları PDF Olarak Aktar", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportClassesPdf() } }

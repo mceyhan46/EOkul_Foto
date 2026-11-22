@@ -72,6 +72,9 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     private var recoveryBlocked = false
     var isRestoring by mutableStateOf(false)
         private set
+    /** Yedek alınırken aşama ve ilerleme; boştaysa null. */
+    var backupProgress by mutableStateOf<BackupProgress?>(null)
+        private set
     /** Arka plandaki fotoğraf yazmaları sırayla çalışır (bellek ve klasör çakışması olmasın). */
     private val saveMutex = Mutex()
 
@@ -1009,14 +1012,16 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Sınıf listesi + küçük fotoğraflar: kayıt klasörü/Yedek/Ydk_ggaayy_ssdd.zip (akış tabanlı, doğrulamalı). */
     fun backup() {
+        if (backupProgress != null) return
         val root = requireRoot() ?: return
+        backupProgress = BackupProgress(BackupProgress.Stage.PREPARE)
         viewModelScope.launch {
             try {
                 saveMutex.withLock {
                 val tb = android.os.SystemClock.elapsedRealtime()
                 val snap = stableRosterSnapshot()
                 val origs = if (settings.backupOriginals) withContext(Dispatchers.IO) { originalSources(root, snap) } else emptyList()
-                val name = backups.write(backupStorage(root), snap, settings.backupPrefix, originals = origs)
+                val name = backups.write(backupStorage(root), snap, settings.backupPrefix, originals = origs, onProgress = { backupProgress = it })
                 Ops.log(
                     "op", "name", "backup", "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tb, "n", name.photos,
                     "captured", name.captured, "retake", snap.sumOf { c -> c.students.count { it.retake } },
@@ -1033,6 +1038,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Throwable) {
                 Ops.log("op", "name", "backup", "ok", false, "err", (e.message ?: e.javaClass.simpleName).take(200))
                 say("Yedek alınamadı: ${e.message ?: e.javaClass.simpleName}")
+            } finally {
+                backupProgress = null
             }
         }
     }
@@ -1199,7 +1206,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 ?: Output.findFile(ctx, root, listOf(OriginalsRules.classDir(c), ORIGINALS_DIR), OriginalsRules.stem(st), "${st.no}-")
                 ?: continue
             val name = OriginalsRules.fileName(st, Output.displayName(ctx, uri))
-            out.add(OriginalFile(OriginalsRules.item(c, st, name)) { ctx.contentResolver.openInputStream(uri) })
+            val size = try { ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length.coerceAtLeast(0L) } ?: 0L } catch (_: Exception) { 0L }
+            out.add(OriginalFile(OriginalsRules.item(c, st, name), size) { ctx.contentResolver.openInputStream(uri) })
         }
         return out
     }
