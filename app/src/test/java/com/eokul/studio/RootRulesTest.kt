@@ -58,4 +58,16 @@ class RootRulesTest {
         assertFalse(RootRules.looksLikeStudioRoot(mapOf("Resimler" to listOf("2024")), "Yedek", "Orijinaller"))
         assertFalse(RootRules.looksLikeStudioRoot(emptyMap(), "Yedek", "Orijinaller"))
     }
+
+    @Test fun kokDizinKipi() {
+        val v = "file:///storage/emulated/0/EOkul_Studio"
+        val r = RootRules.decode(v)
+        assertEquals(v, r.base); assertNull(r.sub)
+        assertTrue(RootRules.isFileRoot(r.base))
+        assertFalse(RootRules.isFileRoot(tree))
+        assertEquals("Dahili depolama/EOkul_Studio", RootRules.fileLabel("/storage/emulated/0/EOkul_Studio"))
+        assertEquals("Dahili depolama", RootRules.fileLabel("/storage/emulated/0"))
+        assertEquals("/storage/1A2B-3C4D/Okul", RootRules.fileLabel("/storage/1A2B-3C4D/Okul"))
+        assertEquals("Kayıt klasörü", RootRules.fileLabel(null))
+    }
 }

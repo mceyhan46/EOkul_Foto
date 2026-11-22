@@ -21,6 +21,17 @@ object RootRules {
         return if (i < 0) Ref(stored, null) else Ref(stored.substring(0, i), stored.substring(i + 1).ifEmpty { null })
     }
 
+    /** Kök dizin kipi: değer bir dosya yoludur ("file:///storage/emulated/0/EOkul_Studio"). */
+    fun isFileRoot(base: String): Boolean = base.startsWith("file:")
+
+    /** Dosya yolundan okunur ad: "/storage/emulated/0/EOkul_Studio" → "Dahili depolama/EOkul_Studio". */
+    fun fileLabel(path: String?): String {
+        if (path.isNullOrEmpty()) return "Kayıt klasörü"
+        val internal = "/storage/emulated/0"
+        val rest = if (path == internal || path.startsWith("$internal/")) path.removePrefix(internal).trim('/') else null
+        return if (rest != null) listOf("Dahili depolama", rest).filter { it.isNotEmpty() }.joinToString("/") else path
+    }
+
     /** Seçilen klasörün adı zaten EOkul_Studio ise doğrudan o kullanılır (null); aksi hâlde içinde EOkul_Studio açılır. */
     fun chooseSub(pickedName: String?): String? = if (pickedName.equals(DEFAULT_SUB, ignoreCase = true)) null else DEFAULT_SUB
 

@@ -37,6 +37,8 @@ fun RootSetupDialog(studio: StudioViewModel) {
     val pick = rememberRootPicker(studio)
     if (!studio.rootSetupRequested) return
     val problem = RootRules.problem(studio.rootState)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val canRoot = studio.canUseRootMode
     AlertDialog(
         onDismissRequest = { studio.rootSetupRequested = false },
         title = { Text(if (studio.rootState == RootRules.State.NOT_SET) "Kayıt Klasörü Kurulumu" else "Kayıt Klasörünü Yeniden Seç") },
@@ -46,19 +48,37 @@ fun RootSetupDialog(studio: StudioViewModel) {
                     Text("⚠ $problem", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.size(8.dp))
                 }
-                Text(
-                    "Fotoğraflar telefonunuzda seçeceğiniz yerin içinde ${RootRules.DEFAULT_SUB} klasörüne kaydedilir; " +
-                        "klasörü uygulama kendisi açar. Uygulamayı silseniz bile dosyalarınız ve yedekleriniz kalır."
-                )
+                if (canRoot) {
+                    Text(
+                        "Önerilen: telefonun ana dizininde ${RootRules.DEFAULT_SUB} klasörü açılır. Bunun için bir kez " +
+                            "“Tüm dosyalara erişim” izni vermeniz gerekir (açılan sayfada anahtarı açıp geri dönün)."
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        "İzin vermek istemezseniz “Belgeler’de Kur”: klasör Belgeler içinde açılır, izin gerekmez.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text("Fotoğraflar seçeceğiniz yerin içinde ${RootRules.DEFAULT_SUB} klasörüne kaydedilir. Açılan ekranda “Bu klasörü kullan”a dokunun.")
+                }
                 Spacer(Modifier.size(8.dp))
                 Text(
-                    "Açılan ekranda “Belgeler” seçili gelir; alttaki “Bu klasörü kullan” düğmesine dokunmanız yeterli.",
+                    "Uygulamayı silseniz bile dosyalarınız ve yedekleriniz kalır.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { studio.rootSetupRequested = false; pick() }) { Text("Devam") } },
-        dismissButton = { TextButton(onClick = { studio.rootSetupRequested = false }) { Text("Sonra") } }
+        confirmButton = {
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                if (canRoot) {
+                    TextButton(onClick = {
+                        studio.setupRootDirectly { intent -> try { ctx.startActivity(intent) } catch (_: Exception) { studio.toast("İzin sayfası açılamadı") } }
+                    }) { Text("Kök Dizinde Kur") }
+                }
+                TextButton(onClick = { studio.rootSetupRequested = false; pick() }) { Text(if (canRoot) "Belgeler’de Kur" else "Devam") }
+                TextButton(onClick = { studio.rootSetupRequested = false }) { Text("Sonra") }
+            }
+        }
     )
 }
 
@@ -66,7 +86,6 @@ fun RootSetupDialog(studio: StudioViewModel) {
 @Composable
 fun RootStatusCard(studio: StudioViewModel) {
     val problem = RootRules.problem(studio.rootState) ?: return
-    val pick = rememberRootPicker(studio)
     Card(
         Modifier.fillMaxWidth().padding(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
@@ -75,12 +94,12 @@ fun RootStatusCard(studio: StudioViewModel) {
             Text(problem, fontWeight = FontWeight.Bold)
             Text(
                 if (studio.rootState == RootRules.State.NOT_SET)
-                    "Fotoğraflar Belgeler/${RootRules.DEFAULT_SUB} klasörüne kaydedilir. Tek dokunuşla kurulur."
+                    "Fotoğraflar ${RootRules.DEFAULT_SUB} klasörüne kaydedilir; kurulum birkaç saniye sürer."
                 else "Dosyalarınız silinmedi; klasörü yeniden seçerek devam edebilirsiniz.",
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.size(6.dp))
-            Button(onClick = pick) { Text(if (studio.rootState == RootRules.State.NOT_SET) "📂 Klasörü Kur" else "📂 Klasörü Yeniden Seç") }
+            Button(onClick = { studio.rootSetupRequested = true }) { Text(if (studio.rootState == RootRules.State.NOT_SET) "📂 Klasörü Kur" else "📂 Klasörü Yeniden Seç") }
         }
     }
 }

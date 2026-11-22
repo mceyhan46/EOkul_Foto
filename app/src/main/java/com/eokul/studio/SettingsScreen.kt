@@ -51,7 +51,6 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         if (uri != null) studio.saveReportTo(uri)
     }
     val shareCtx = androidx.compose.ui.platform.LocalContext.current
-    val rootPicker = rememberRootPicker(studio)
     val cur = vm.settings
     val def = Settings()
 
@@ -160,7 +159,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             if (studio.rootState != RootRules.State.NOT_SET) Text("⚠ $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
         Spacer(Modifier.size(4.dp))
-        OutlinedButton(onClick = rootPicker) { Text(if (studio.rootState == RootRules.State.NOT_SET) "Klasörü Kur" else "Klasörü Değiştir") }
+        OutlinedButton(onClick = { studio.rootSetupRequested = true }) { Text(if (studio.rootState == RootRules.State.NOT_SET) "Klasörü Kur" else "Klasörü Değiştir") }
         Text(
             "Yapı: Sınıf/12345-Ad Soyad.jpg · Sınıf/Orijinaller/12345-Ad Soyad.jpg. Klasörü değiştirirseniz mevcut dosyalar eski yerinde kalır.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant

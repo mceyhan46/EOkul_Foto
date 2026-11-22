@@ -136,7 +136,12 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Uygulama arka plandan dönerse ve 30 sn'den uzun kaldıysa kilitler. */
     fun onForegrounded() {
-        refreshRoot()
+        if (pendingRootSetup) {
+            // "Tüm dosyalara erişim" sayfasından dönüldü
+            pendingRootSetup = false
+            if (rootFolder.hasAllFilesAccess()) applyRootSetup { rootFolder.setupRoot() }
+            else say("İzin verilmedi. Kurulum için tekrar deneyin veya “Belgeler'de Kur”u seçin.")
+        } else refreshRoot()
         if (PinLock.shouldLock(settings.pinHash != null, backgroundedAt, System.currentTimeMillis())) locked = true
     }
 
@@ -317,6 +322,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     private val rootFolder by lazy { RootFolder(ctx) }
     private var rootPrompted = false
+    private var pendingRootSetup = false
     private var rootRefreshGen = 0
 
     /** Kayıt klasörünün güncel durumu (açılışta, ekrana dönüşte ve kurulumdan sonra [refreshRoot] günceller). */
@@ -365,23 +371,40 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Kullanıcının seçtiği klasörü kurar (içinde EOkul_Studio açar); eski izni bırakır. */
-    fun setRootFolder(uri: Uri) {
+    fun setRootFolder(uri: Uri) = applyRootSetup { rootFolder.setup(uri) }
+
+    /** Kök dizin kipi: izin varsa hemen kurar; yoksa [launchSettings] ile izin sayfasını açar ve dönüşte kurulumu tamamlar. */
+    fun setupRootDirectly(launchSettings: (android.content.Intent) -> Unit) {
+        if (rootFolder.hasAllFilesAccess()) {
+            applyRootSetup { rootFolder.setupRoot() }
+        } else {
+            pendingRootSetup = true
+            rootSetupRequested = false
+            launchSettings(rootFolder.allFilesAccessIntent())
+        }
+    }
+
+    /** Bu telefonda kök dizin kipi sunulabilir mi? */
+    val canUseRootMode: Boolean get() = rootFolder.canUseRoot()
+
+    private fun applyRootSetup(setup: () -> RootFolder.Setup) {
         viewModelScope.launch {
             val old = settings.rootUri
-            val result = withContext(Dispatchers.IO) { runCatching { rootFolder.setup(uri) } }
-            val setup = result.getOrElse {
+            val result = withContext(Dispatchers.IO) { runCatching(setup) }
+            val done = result.getOrElse {
+                Ops.error("root_setup", it)
                 say("⚠ " + (it.message ?: "Klasör kurulamadı"))
                 return@launch
             }
-            if (old != null && RootRules.decode(old).base != RootRules.decode(setup.encoded).base) {
+            if (old != null && RootRules.decode(old).base != RootRules.decode(done.encoded).base) {
                 withContext(Dispatchers.IO) { rootFolder.release(old) }
             }
-            SettingsState.update(settings.copy(rootUri = setup.encoded))
+            SettingsState.update(settings.copy(rootUri = done.encoded))
             rootSetupRequested = false
             refreshRoot()
-            val where = withContext(Dispatchers.IO) { rootFolder.label(setup.encoded) }
+            val where = withContext(Dispatchers.IO) { rootFolder.label(done.encoded) }
             say(
-                if (setup.reused) "✓ Mevcut klasör bulundu: $where. Yedek veya klasör içeriğinden devam edebilirsiniz."
+                if (done.reused) "✓ Mevcut klasör bulundu: $where. Yedek veya klasör içeriğinden devam edebilirsiniz."
                 else "✓ Kayıt klasörü hazır: $where"
             )
         }

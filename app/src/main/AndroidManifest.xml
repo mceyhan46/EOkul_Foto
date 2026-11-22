@@ -4,6 +4,9 @@
     <!-- Yalnızca kamera izni: klasör/fotoğraf seçimi sistem seçicisiyle yapılır, kayıt seçilen klasöre yazılır.
          İnternet izni yoktur; veriler telefondan çıkmaz. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- İsteğe bağlı: telefonun ana dizininde EOkul_Studio klasörü açmak için (yalnızca kullanıcı "Kök Dizinde Kur"u seçerse
+         ve ayarlardan izni verirse kullanılır). İnternet izni yine yoktur. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <application

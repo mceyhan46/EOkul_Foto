@@ -6,6 +6,10 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import com.eokul.studio.core.BackupNames
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
+import java.io.File
 import java.io.IOException
 
 /**
@@ -54,7 +58,7 @@ class RootFolder(private val ctx: Context) {
 
     /** Gerçekten dosya yazılabiliyor mu? (Bazı sağlayıcılar canWrite=true deyip yazdırmaz.) */
     private fun probe(dir: DocumentFile) {
-        val f = dir.createFile("application/octet-stream", ".eokul_probe") ?: throw IOException("Klasörde dosya oluşturulamıyor; başka bir klasör seçin")
+        val f = Output.newFile(dir, "application/octet-stream", ".eokul_probe") ?: throw IOException("Klasörde dosya oluşturulamıyor; başka bir klasör seçin")
         try {
             ctx.contentResolver.openOutputStream(f.uri, "w")?.use { it.write(1) } ?: throw IOException("Klasöre yazılamıyor; başka bir klasör seçin")
         } finally {
@@ -62,10 +66,34 @@ class RootFolder(private val ctx: Context) {
         }
     }
 
+    /** "Tüm dosyalara erişim" izni verilmiş mi? (Android 11+; altında normal depolama izni gerekir ve desteklenmez.) */
+    fun hasAllFilesAccess(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
+
+    /** Bu telefonda kök dizin kipi sunulabilir mi? (Android 11+) */
+    fun canUseRoot(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+    /** Ayarlar'daki "Tüm dosyalara erişim" sayfasını açacak intent (yalnızca bu uygulama için). */
+    fun allFilesAccessIntent(): Intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}"))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /** Telefonun kök dizininde EOkul_Studio klasörünü açar ("Tüm dosyalara erişim" izni gerekir). */
+    fun setupRoot(): Setup {
+        if (!hasAllFilesAccess()) throw IOException("Tüm dosyalara erişim izni verilmedi")
+        val dir = File(Environment.getExternalStorageDirectory(), RootRules.DEFAULT_SUB)
+        if (!dir.exists() && !dir.mkdirs()) throw IOException("${RootRules.DEFAULT_SUB} klasörü kök dizinde oluşturulamadı")
+        val reused = !dir.list().isNullOrEmpty()
+        probe(DocumentFile.fromFile(dir))
+        return Setup(Uri.fromFile(dir).toString(), reused)
+    }
+
     /** Kayıtlı klasörün güncel durumu. */
     fun status(encoded: String?): RootRules.State {
         if (encoded == null) return RootRules.State.NOT_SET
         val ref = RootRules.decode(encoded)
+        if (RootRules.isFileRoot(ref.base)) {
+            val f = File(Uri.parse(ref.base).path ?: "")
+            return RootRules.status(true, hasAllFilesAccess(), f.isDirectory, f.canWrite())
+        }
         val base = Uri.parse(ref.base)
         val grant = ctx.contentResolver.persistedUriPermissions.any { it.uri == base && it.isWritePermission }
         var exists = false
@@ -83,10 +111,14 @@ class RootFolder(private val ctx: Context) {
     /** Alt klasör silinmiş ama ana klasör duruyorsa EOkul_Studio'yu yeniden açar; başarılıysa true. */
     fun repair(encoded: String): Boolean = try {
         val ref = RootRules.decode(encoded)
-        val sub = ref.sub
-        val b = DocumentFile.fromTreeUri(ctx, Uri.parse(ref.base))
-        if (sub == null || b == null || !b.exists() || !b.canWrite()) false
-        else b.findFile(sub)?.takeIf { it.isDirectory } != null || b.createDirectory(sub) != null
+        if (RootRules.isFileRoot(ref.base)) {
+            hasAllFilesAccess() && File(Uri.parse(ref.base).path ?: "").let { it.isDirectory || it.mkdirs() }
+        } else {
+            val sub = ref.sub
+            val b = DocumentFile.fromTreeUri(ctx, Uri.parse(ref.base))
+            if (sub == null || b == null || !b.exists() || !b.canWrite()) false
+            else b.findFile(sub)?.takeIf { it.isDirectory } != null || b.createDirectory(sub) != null
+        }
     } catch (_: Exception) {
         false
     }
@@ -95,6 +127,7 @@ class RootFolder(private val ctx: Context) {
     fun label(encoded: String?): String? {
         if (encoded == null) return null
         val ref = RootRules.decode(encoded)
+        if (RootRules.isFileRoot(ref.base)) return RootRules.fileLabel(Uri.parse(ref.base).path)
         val id = try { DocumentsContract.getTreeDocumentId(Uri.parse(ref.base)) } catch (_: Exception) { null }
         return RootRules.label(id, ref.sub)
     }

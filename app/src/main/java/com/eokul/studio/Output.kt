@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
+import java.io.File
 import java.io.IOException
 
 /**
@@ -22,7 +23,15 @@ object Output {
     private fun dirFor(ctx: Context, tree: Uri, segments: List<String>, create: Boolean): DocumentFile? {
         // Kayıt klasörü "ağaç#EOkul_Studio" biçiminde olabilir: yollar ağacın içindeki alt klasörden başlar.
         val ref = RootRules.decode(tree.toString())
-        var cur = DocumentFile.fromTreeUri(ctx, Uri.parse(ref.base)) ?: throw IOException("Ana klasöre erişilemiyor")
+        var cur = if (RootRules.isFileRoot(ref.base)) {
+            // Kök dizin kipi ("Tüm dosyalara erişim"): doğrudan dosya yolu
+            val f = File(Uri.parse(ref.base).path ?: throw IOException("Ana klasöre erişilemiyor"))
+            if (!f.exists() && create) f.mkdirs()
+            if (!f.isDirectory) return null
+            DocumentFile.fromFile(f)
+        } else {
+            DocumentFile.fromTreeUri(ctx, Uri.parse(ref.base)) ?: throw IOException("Ana klasöre erişilemiyor")
+        }
         for (seg in listOfNotNull(ref.sub) + segments) {
             val found = cur.findFile(seg)
             cur = if (found != null && found.isDirectory) {
@@ -35,6 +44,24 @@ object Output {
         }
         return cur
     }
+
+    /**
+     * Klasörde boş dosya açar. Dosya yolu kipinde (file://) DocumentFile.createFile, MIME'den uzantı ekleyip
+     * "a.jpg.jpg" üretebildiği için dosya doğrudan oluşturulur; SAF'ta sağlayıcı adı olduğu gibi korur.
+     */
+    fun newFile(dir: DocumentFile, mime: String, name: String): DocumentFile? {
+        if (dir.uri.scheme != "file") return dir.createFile(mime, name)
+        val f = File(File(dir.uri.path ?: return null), name)
+        return try {
+            if (f.exists() || f.createNewFile()) DocumentFile.fromFile(f) else null
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    /** Tek belge/dosya Uri'si için DocumentFile (SAF belgesi veya file://). */
+    private fun docFor(ctx: Context, uri: Uri): DocumentFile? =
+        if (uri.scheme == "file") uri.path?.let { DocumentFile.fromFile(File(it)) } else DocumentFile.fromSingleUri(ctx, uri)
 
     fun writePath(
         ctx: Context, tree: Uri, segments: List<String>, name: String, mime: String, bytes: ByteArray
@@ -57,7 +84,7 @@ object Output {
         val token = java.util.UUID.randomUUID().toString().replace("-", "")
         val tmpName = ".tmp-$token-$name"
         val backupName = ".old-$token-$name"
-        val tmp = dir.createFile(mime, tmpName) ?: throw IOException("Geçici dosya oluşturulamadı: $name")
+        val tmp = newFile(dir, mime, tmpName) ?: throw IOException("Geçici dosya oluşturulamadı: $name")
         var backup: DocumentFile? = null
         var destination: DocumentFile? = null
         var committed = false
@@ -87,7 +114,7 @@ object Output {
                 if (!old.renameTo(backupName)) {
                     // Bazı SAF sağlayıcıları rename desteklemez. Bu durumda önce eski dosyanın
                     // doğrulanmış kopyası alınır; hedef yerinde güncellenir ve hata olursa geri yazılır.
-                    val backupCopy = dir.createFile(mime, backupName)
+                    val backupCopy = newFile(dir, mime, backupName)
                         ?: throw IOException("Mevcut dosya için güvenlik kopyası oluşturulamadı: $name")
                     try {
                         copyDocument(ctx, old, backupCopy)
@@ -123,7 +150,7 @@ object Output {
                     ?: throw IOException("Yeni dosya son konumunda bulunamadı")
             } else {
                 // Hedef boşken sağlayıcı rename desteklemiyorsa yeni dosyaya kopyalanır.
-                destination = dir.createFile(mime, name)
+                destination = newFile(dir, mime, name)
                     ?: throw IOException("Yeni dosya oluşturulamadı: $name")
                 copyDocument(ctx, tmp, destination)
             }
@@ -276,7 +303,7 @@ object Output {
     /** Tek dosyayı yeni uzantısız ad ile yeniden adlandırır (uzantı korunur); yeni URI veya null. */
     fun renameUri(ctx: Context, uri: Uri, newStem: String): Uri? {
         return try {
-            val df = DocumentFile.fromSingleUri(ctx, uri) ?: return null
+            val df = docFor(ctx, uri) ?: return null
             val ext = (df.name ?: "").substringAfterLast('.', "jpg")
             if (df.renameTo("$newStem.$ext")) df.uri else null
         } catch (e: Exception) {
@@ -303,7 +330,7 @@ object Output {
 
     fun deleteUri(ctx: Context, uri: Uri) {
         try {
-            DocumentFile.fromSingleUri(ctx, uri)?.delete()
+            docFor(ctx, uri)?.delete()
         } catch (e: Exception) {
             // yoksay
         }
