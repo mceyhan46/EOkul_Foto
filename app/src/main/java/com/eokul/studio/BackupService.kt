@@ -26,7 +26,7 @@ data class BackupInfo(
 )
 
 /** Yedeğe eklenecek bir orijinal fotoğraf: eşleşme bilgisi ve içeriği açan işlev. */
-class OriginalFile(val item: OriginalsRules.Item, val open: () -> InputStream?)
+class OriginalFile(val item: OriginalsRules.Item, val size: Long = 0L, val open: () -> InputStream?)
 
 /** Geri yüklemede çıkarılan bir orijinal: geçici dosya ve ait olduğu öğrenci. Çağıran kayıt klasörüne yazıp [file]'ı siler. */
 class RestoredOriginal(val item: OriginalsRules.Item, val file: File)
@@ -58,7 +58,8 @@ class BackupService(
      * Doğrulama başarısızsa dosya silinir ve IOException fırlatılır.
      */
     suspend fun write(
-        storage: BackupStorage, snap: List<SchoolClass>, prefix: String, now: Date = Date(), originals: List<OriginalFile> = emptyList()
+        storage: BackupStorage, snap: List<SchoolClass>, prefix: String, now: Date = Date(), originals: List<OriginalFile> = emptyList(),
+        onProgress: (BackupProgress) -> Unit = {}
     ): BackupWritten =
         withContext(Dispatchers.IO) {
             val rosterBytes = store.encode(snap).toByteArray(Charsets.UTF_8)
@@ -89,8 +90,17 @@ class BackupService(
                 }
             }
             val name = BackupNames.name(prefix, now, TimeZone.getDefault(), "zip")
+            val totalBytes = photos.sumOf { it.length() } + originals.sumOf { it.size }
+            var lastPct = -1
+            val counting: (Long) -> Unit = { written ->
+                val f = BackupProgress.fraction(written, totalBytes)
+                val pct = if (f == null) -1 else BackupProgress.percent(f)
+                if (pct != lastPct) { lastPct = pct; onProgress(BackupProgress(BackupProgress.Stage.WRITE, f)) }
+            }
+            onProgress(BackupProgress(BackupProgress.Stage.WRITE, if (totalBytes > 0) 0f else null))
             val stored = try {
-                storage.write(name) { out: OutputStream ->
+                storage.write(name) { raw: OutputStream ->
+                    val out = CountingOutputStream(raw, counting)
                     BackupZip.write(out, manifest.toByteArray(Charsets.UTF_8), rosterBytes, filesDir, photos, extras)
                 }
             } catch (e: Exception) {
@@ -98,6 +108,7 @@ class BackupService(
                 try { storage.delete(name) } catch (_: Exception) { /* silinemeyen yarım dosya kritik değil */ }
                 throw e
             }
+            onProgress(BackupProgress(BackupProgress.Stage.VERIFY))
             // Yazılan ZIP yeniden açılır; tüm girdiler, manifest ve roster snapshot'ı doğrulanır.
             try {
                 val content = stored.open()?.use { ins ->

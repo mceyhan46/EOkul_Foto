@@ -2,9 +2,14 @@ package com.eokul.studio
 
 import android.content.Context
 import com.eokul.studio.core.RosterParser
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 
 const val ORIGINALS_DIR = "Orijinaller"
 const val EOKUL_DIR = "E-Okul"
@@ -238,7 +243,7 @@ class RosterStore(private val file: File) {
         var rollback: File? = null
         var hadOriginal = file.exists()
         return try {
-            if (!prepared.exists()) throw java.io.IOException("Hazırlanmış liste dosyası bulunamadı")
+            if (!prepared.exists()) throw IOException("Hazırlanmış liste dosyası bulunamadı")
             parseStrict(prepared.readText(Charsets.UTF_8))
             file.parentFile?.mkdirs()
 
@@ -265,7 +270,7 @@ class RosterStore(private val file: File) {
             replaceFile(prepared, file)
             val check = parseStrict(file.readText(Charsets.UTF_8))
             if (check.size != expected.size || check.sumOf { it.students.size } != expected.sumOf { it.students.size } || encode(check) != encode(expected)) {
-                throw java.io.IOException("Kayıt doğrulaması başarısız")
+                throw IOException("Kayıt doğrulaması başarısız")
             }
             rollback?.delete()
             null
@@ -284,7 +289,7 @@ class RosterStore(private val file: File) {
 
     private fun writeSynced(target: File, bytes: ByteArray) {
         target.parentFile?.mkdirs()
-        java.io.FileOutputStream(target).use { out ->
+        FileOutputStream(target).use { out ->
             out.write(bytes)
             out.flush()
             out.fd.sync()
@@ -293,8 +298,8 @@ class RosterStore(private val file: File) {
 
     private fun copySynced(source: File, target: File) {
         target.parentFile?.mkdirs()
-        java.io.FileInputStream(source).use { input ->
-            java.io.FileOutputStream(target).use { output ->
+        FileInputStream(source).use { input ->
+            FileOutputStream(target).use { output ->
                 input.copyTo(output)
                 output.flush()
                 output.fd.sync()
@@ -304,14 +309,14 @@ class RosterStore(private val file: File) {
 
     private fun replaceFile(source: File, target: File) {
         try {
-            java.nio.file.Files.move(
+            Files.move(
                 source.toPath(), target.toPath(),
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING
             )
         } catch (_: Exception) {
             // Aynı dosya sistemi içinde normal taşıma; çağıran rollback kopyasını tutar.
-            java.nio.file.Files.move(source.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
 

@@ -1,38 +1,46 @@
 package com.eokul.studio
 
+import android.app.Activity
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -51,9 +59,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             // PIN açıkken son uygulamalar ekranında ve ekran görüntülerinde öğrenci bilgileri görünmesin.
             val secure = studio.settings.pinHash != null
-            androidx.compose.runtime.SideEffect {
-                if (secure) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-                else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            SideEffect {
+                if (secure) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
             EOkulTheme {
                 AppRoot(vm, studio)
@@ -82,16 +90,16 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Yumuşak köşeler: etiket 8, alan 12, kart 16, büyük yüzey 20 dp. Gölge yok; kartlar ince çerçeveyle ayrılır. */
-private val AppShapes = androidx.compose.material3.Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-    large = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp)
 )
 
 /** Tipografi hiyerarşisi: sayı/başlık kalın, gövde 15, ikincil 13, etiket 12 sp (12 sp altına inilmez). */
-private val AppTypography = androidx.compose.material3.Typography().let { t ->
+private val AppTypography = Typography().let { t ->
     t.copy(
         headlineMedium = t.headlineMedium.copy(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold),
         titleLarge = t.titleLarge.copy(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold),
@@ -148,9 +156,9 @@ fun AppRoot(vm: AppViewModel, studio: StudioViewModel) {
         else -> MaterialTheme.colorScheme.background
     }
     val sysDark = isSystemInDarkTheme()
-    val view = androidx.compose.ui.platform.LocalView.current
-    androidx.compose.runtime.SideEffect {
-        val w = (view.context as? android.app.Activity)?.window
+    val view = LocalView.current
+    SideEffect {
+        val w = (view.context as? Activity)?.window
         if (w != null) {
             val c = androidx.core.view.WindowCompat.getInsetsController(w, view)
             val lightBars = !darkScreen && !sysDark
@@ -161,7 +169,7 @@ fun AppRoot(vm: AppViewModel, studio: StudioViewModel) {
     // Ana, sınıf ve liste ekleme ekranlarında üst başlık durum çubuğunun arkasına uzanır (kendi içinde boşluk bırakır); diğerlerinde tüm güvenli alan.
     val insets = if ((sc0 is Screen.Home || sc0 is Screen.ClassDetail || sc0 is Screen.Import || sc0 is Screen.MultiImport) && !studio.locked) {
         WindowInsets.safeDrawing.only(
-            androidx.compose.foundation.layout.WindowInsetsSides.Horizontal + androidx.compose.foundation.layout.WindowInsetsSides.Bottom
+            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
         )
     } else {
         WindowInsets.safeDrawing

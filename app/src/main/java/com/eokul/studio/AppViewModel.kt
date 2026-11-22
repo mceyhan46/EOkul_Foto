@@ -533,7 +533,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                                         val w = bmp.width
                                         val h = bmp.height
                                         bmp.recycle()
-                                        ImageOps.render(appCtx, px, w, h, box!!.fitInside(w, h), s)
+                                        ImageOps.render(appCtx, px, w, h, requireNotNull(box).fitInside(w, h), s)
                                     }
                                 }
                             }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -87,7 +88,7 @@ fun AppButton(
         BtnStyle.Tertiary -> TextButton(
             onClick = onClick, modifier = m, enabled = enabled, shape = BtnShape, contentPadding = pad,
             colors = ButtonDefaults.textButtonColors(
-                contentColor = if (dark) DarkOnSurface else androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                contentColor = if (dark) DarkOnSurface else MaterialTheme.colorScheme.primary,
                 disabledContentColor = DarkDisabled
             ),
             content = content

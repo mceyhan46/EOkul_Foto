@@ -1,48 +1,55 @@
 package com.eokul.studio
 
-import android.net.Uri
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import kotlinx.coroutines.launch
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,16 +61,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.ui.draw.alpha
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(studio: StudioViewModel) {
@@ -72,13 +83,13 @@ fun HomeScreen(studio: StudioViewModel) {
     var deleteId by remember { mutableStateOf<String?>(null) }
     var alsoFilesClass by remember { mutableStateOf(false) }
 
-    val drawerState = androidx.compose.material3.rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
+    val drawerState = androidx.compose.material3.rememberDrawerState(DrawerValue.Closed)
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val startRestore = rememberRestoreFlow(studio)
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     // Menüden bir işlem seçilince önce menü kapanır, sonra işlem başlar.
     val closeThen: (() -> Unit) -> Unit = { action -> scope.launch { drawerState.close() }; action() }
-    androidx.compose.material3.ModalNavigationDrawer(
+    ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = { HomeDrawer(studio, closeThen, startRestore) }
     ) {
@@ -106,6 +117,7 @@ fun HomeScreen(studio: StudioViewModel) {
                 }
 
                 RootStatusCard(studio)
+                BackupProgressCard(studio)
 
                 if (studio.classes.isNotEmpty()) SummaryCard(studio)
 
@@ -127,7 +139,7 @@ fun HomeScreen(studio: StudioViewModel) {
                 } else {
                     LazyColumn(
                         Modifier.weight(1f).fillMaxWidth(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        contentPadding = PaddingValues(
                             start = 12.dp, end = 12.dp, top = 8.dp, bottom = 112.dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -147,7 +159,7 @@ fun HomeScreen(studio: StudioViewModel) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    textAlign = TextAlign.Center
                 )
             }
             if (studio.classes.isNotEmpty()) {
@@ -157,7 +169,7 @@ fun HomeScreen(studio: StudioViewModel) {
                     modifier = Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 44.dp),
                     containerColor = softColors().container,
                     contentColor = softColors().onContainer,
-                    elevation = androidx.compose.material3.FloatingActionButtonDefaults.elevation(2.dp, 2.dp, 2.dp, 2.dp)
+                    elevation = FloatingActionButtonDefaults.elevation(2.dp, 2.dp, 2.dp, 2.dp)
                 ) { Text("＋ Sınıf ekle", fontWeight = FontWeight.SemiBold) }
             }
         }
@@ -221,7 +233,7 @@ fun HomeScreen(studio: StudioViewModel) {
                         Modifier.fillMaxWidth().clickable { alsoFilesClass = !alsoFilesClass }.padding(top = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        androidx.compose.material3.Checkbox(checked = alsoFilesClass, onCheckedChange = { alsoFilesClass = it })
+                        Checkbox(checked = alsoFilesClass, onCheckedChange = { alsoFilesClass = it })
                         Text(
                             "Kayıt klasöründeki fotoğraf dosyalarını (Orijinaller dahil) da sil",
                             style = MaterialTheme.typography.bodyMedium
@@ -256,7 +268,7 @@ private fun SummaryCard(studio: StudioViewModel) {
     val retake = classes.sumOf { c -> c.students.count { it.retake } }
     val last = studio.settings.lastBackupMs
     val backupText = if (last == 0L) "Yedek yok"
-    else "Yedek " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
+    else "Yedek " + SimpleDateFormat("d MMM HH:mm", Locale.forLanguageTag("tr")).format(Date(last))
     val stale = done > 0 && (last == 0L || System.currentTimeMillis() - last > 7L * 24 * 3600 * 1000)
     val frac = if (total == 0) 0f else done.toFloat() / total
     val soft = softColors()
@@ -394,13 +406,13 @@ private fun HomeDrawer(studio: StudioViewModel, closeThen: (() -> Unit) -> Unit,
     val total = studio.classes.sumOf { it.students.size }
     val done = studio.classes.sumOf { it.capturedCount }
     val last = studio.settings.lastBackupMs
-    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val ctx = LocalContext.current
     val version = remember {
         try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
     }
     val backupText = if (last == 0L) "Yedek yok"
-    else "Yedek " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale.forLanguageTag("tr")).format(java.util.Date(last))
-    androidx.compose.material3.ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface) {
+    else "Yedek " + SimpleDateFormat("d MMM HH:mm", Locale.forLanguageTag("tr")).format(Date(last))
+    ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
             Column(
                 Modifier.fillMaxWidth().background(soft.container)
@@ -418,7 +430,7 @@ private fun HomeDrawer(studio: StudioViewModel, closeThen: (() -> Unit) -> Unit,
             DrawerItem("Çoklu Sınıf Listesi (Excel)", Icons.AutoMirrored.Filled.List) { closeThen { studio.navigate(Screen.MultiImport) } }
             DrawerItem("Toplu Kırpma", Icons.Filled.Edit) { closeThen { studio.navigate(Screen.Batch) } }
             DrawerGroup("Yedek Ve Veri")
-            DrawerItem("Yedekle", Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring) { closeThen { studio.backup() } }
+            DrawerItem("Yedekle", Icons.AutoMirrored.Filled.Send, enabled = !studio.isRestoring && studio.backupProgress == null) { closeThen { studio.backup() } }
             DrawerItem("Yedekten Geri Yükle", Icons.Filled.Refresh, enabled = !studio.isRestoring) { closeThen { startRestore() } }
             DrawerItem("Tüm Sınıflar ZIP (Klasörlü + Rapor)", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportAllFoldersZip() } }
             DrawerItem("Sınıfları PDF Olarak Aktar", Icons.Filled.Share, enabled = hasClasses) { closeThen { studio.exportClassesPdf() } }
@@ -446,24 +458,24 @@ private fun DrawerGroup(title: String) {
 @Composable
 private fun DrawerItem(
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     selected: Boolean = false,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val soft = softColors()
-    androidx.compose.material3.NavigationDrawerItem(
+    NavigationDrawerItem(
         label = { Text(label, maxLines = 2) },
-        icon = { androidx.compose.material3.Icon(icon, contentDescription = null) },
+        icon = { Icon(icon, contentDescription = null) },
         selected = selected,
         onClick = { if (enabled) onClick() },
-        colors = androidx.compose.material3.NavigationDrawerItemDefaults.colors(
+        colors = NavigationDrawerItemDefaults.colors(
             selectedContainerColor = soft.container,
             selectedTextColor = soft.onContainer,
             selectedIconColor = soft.onContainer
         ),
         modifier = Modifier
-            .padding(androidx.compose.material3.NavigationDrawerItemDefaults.ItemPadding)
+            .padding(NavigationDrawerItemDefaults.ItemPadding)
             .defaultMinSize(minHeight = 52.dp)
             .alpha(if (enabled) 1f else 0.4f)
     )

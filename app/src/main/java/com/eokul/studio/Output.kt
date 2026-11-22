@@ -9,6 +9,8 @@ import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import java.io.IOException
+import java.io.OutputStream
+import java.util.UUID
 
 /**
  * Çıktı yazıcı.
@@ -76,12 +78,12 @@ object Output {
      */
     fun writeStream(
         ctx: Context, tree: Uri, segments: List<String>, name: String, mime: String,
-        writer: (java.io.OutputStream) -> Unit
+        writer: (OutputStream) -> Unit
     ): Uri {
         require(name.isNotBlank() && !name.contains('/') && !name.contains('\\')) { "Geçersiz dosya adı" }
         val dir = dirFor(ctx, tree, segments, true) ?: throw IOException("Klasör bulunamadı")
         cleanupStaleTemps(dir)
-        val token = java.util.UUID.randomUUID().toString().replace("-", "")
+        val token = UUID.randomUUID().toString().replace("-", "")
         val tmpName = ".tmp-$token-$name"
         val backupName = ".old-$token-$name"
         val tmp = newFile(dir, mime, tmpName) ?: throw IOException("Geçici dosya oluşturulamadı: $name")
@@ -96,7 +98,7 @@ object Output {
             val raw = ctx.contentResolver.openOutputStream(tmp.uri, "wt")
                 ?: throw IOException("Dosya yazılamadı: $name")
             raw.use { output ->
-                val counting = object : java.io.OutputStream() {
+                val counting = object : OutputStream() {
                     override fun write(b: Int) { output.write(b); written++ }
                     override fun write(b: ByteArray, off: Int, len: Int) { output.write(b, off, len); written += len }
                     override fun flush() = output.flush()

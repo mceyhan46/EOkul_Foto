@@ -2,7 +2,11 @@ package com.eokul.studio
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -10,6 +14,14 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.eokul.studio.core.RosterParser
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,10 +31,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.IOException
 
 sealed interface Screen {
     data object Home : Screen
@@ -71,6 +80,9 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     private val pendingCaptureOriginals = HashMap<String, Student>()
     private var recoveryBlocked = false
     var isRestoring by mutableStateOf(false)
+        private set
+    /** Yedek alınırken aşama ve ilerleme; boştaysa null. */
+    var backupProgress by mutableStateOf<BackupProgress?>(null)
         private set
     /** Arka plandaki fotoğraf yazmaları sırayla çalışır (bellek ve klasör çakışması olmasın). */
     private val saveMutex = Mutex()
@@ -155,7 +167,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         return com.eokul.studio.core.PinCrypto.verify(pin, salt, h)
     }
 
-    private val lockPrefs by lazy { ctx.getSharedPreferences("eokul_lock", android.content.Context.MODE_PRIVATE) }
+    private val lockPrefs by lazy { ctx.getSharedPreferences("eokul_lock", Context.MODE_PRIVATE) }
     private val pinLock by lazy {
         PinLock(object : LockStore {
             override var fails: Int
@@ -192,7 +204,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             SettingsState.update(settings.copy(pinHash = null, pinSalt = null))
             locked = false
         } else {
-            val salt = java.util.UUID.randomUUID().toString()
+            val salt = UUID.randomUUID().toString()
             SettingsState.update(settings.copy(pinHash = com.eokul.studio.core.PinCrypto.hash(pin, salt), pinSalt = salt))
         }
     }
@@ -392,7 +404,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     fun setRootFolder(uri: Uri, direct: Boolean = false) = applyRootSetup { rootFolder.setup(uri, direct) }
 
     /** Kök dizin kipi: izin varsa hemen kurar; yoksa [launchSettings] ile izin sayfasını açar ve dönüşte kurulumu tamamlar. */
-    fun setupRootDirectly(launchSettings: (android.content.Intent) -> Unit) {
+    fun setupRootDirectly(launchSettings: (Intent) -> Unit) {
         if (rootFolder.hasAllFilesAccess()) {
             applyRootSetup { rootFolder.setupRoot() }
         } else {
@@ -545,7 +557,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         if (n.isEmpty()) return false
         val change = RosterRules.renameClass(classes.toList(), id, n)
         if (!change.ok) {
-            say(change.error!!)
+            say(change.error ?: "Sınıf adı değiştirilemedi")
             return false
         }
         val oldDir = RosterParser.sanitizeFileName(c.name)
@@ -742,7 +754,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         capture?.temp?.delete()
         val pf = prefetch
         prefetch = null
-        val tReady = android.os.SystemClock.elapsedRealtime()
+        val tReady = SystemClock.elapsedRealtime()
         val pfState = if (pf == null || temp == null) "none" else if (pf.first == temp && !pf.second.isCancelled) "hit" else "miss"
         val cap = CaptureState(classId, no, source, temp, fromSaved)
         cap.directEdit = directEdit
@@ -789,7 +801,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 s.loading = false
                 cap.session = s
                 cap.loading = false
-                cap.shownAt = android.os.SystemClock.elapsedRealtime()
+                cap.shownAt = SystemClock.elapsedRealtime()
                 Ops.log(
                     "review_ready", "id", Ops.id(no), "ms", cap.shownAt - tReady, "prefetch", pfState,
                     "w", dims.first, "h", dims.second, "faces", faces.size, "saved", fromSaved, "autoBox", autoBox
@@ -821,7 +833,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             val px = s.pixels
             if (px != null) {
                 try {
-                    s.bitmap = android.graphics.Bitmap.createBitmap(px, s.iw, s.ih, android.graphics.Bitmap.Config.ARGB_8888)
+                    s.bitmap = Bitmap.createBitmap(px, s.iw, s.ih, Bitmap.Config.ARGB_8888)
                 } catch (e: OutOfMemoryError) {
                     say("Düzenleyici için bellek yetersiz: " + Diag.memInfo())
                     return
@@ -859,7 +871,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ araçlar (dışa aktarma, yedek, adlar)
     private fun stamp(): String =
-        java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date())
+        SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
 
     /**
      * Tüm sınıfları (veya [classId] verilirse yalnızca onu) fotoğraf listesi PDF'i olarak kayıt klasörü/PDF içine yazar.
@@ -874,7 +886,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             try {
-                val name = com.eokul.studio.core.BackupNames.name("Foto", java.util.Date(), java.util.TimeZone.getDefault(), "pdf")
+                val name = com.eokul.studio.core.BackupNames.name("Foto", Date(), TimeZone.getDefault(), "pdf")
                 val ratio = TARGET_H.toDouble() / TARGET_W
                 val pages = withContext(Dispatchers.IO) {
                     var n = 0
@@ -941,7 +953,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
      * Ydk_160726_0816.zip. Eski "Yedek-….zip" dosyaları geri yüklenebilir (içerik denetimi addan bağımsızdır).
      */
     private fun artifactName(prefix: String, ext: String): String =
-        com.eokul.studio.core.BackupNames.name(prefix, java.util.Date(), java.util.TimeZone.getDefault(), ext)
+        com.eokul.studio.core.BackupNames.name(prefix, Date(), TimeZone.getDefault(), ext)
 
     /** Yedek/geri yükleme servisi (Android'den bağımsız mantık; bkz. BackupService). */
     private val backups by lazy {
@@ -951,8 +963,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             storeMutex = storeMutex,
             appVersion = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" } catch (_: Exception) { "" },
             isImage = { f ->
-                val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                android.graphics.BitmapFactory.decodeFile(f.path, o)
+                val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(f.path, o)
                 o.outWidth > 0 && o.outHeight > 0
             }
         )
@@ -1009,16 +1021,18 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Sınıf listesi + küçük fotoğraflar: kayıt klasörü/Yedek/Ydk_ggaayy_ssdd.zip (akış tabanlı, doğrulamalı). */
     fun backup() {
+        if (backupProgress != null) return
         val root = requireRoot() ?: return
+        backupProgress = BackupProgress(BackupProgress.Stage.PREPARE)
         viewModelScope.launch {
             try {
                 saveMutex.withLock {
-                val tb = android.os.SystemClock.elapsedRealtime()
+                val tb = SystemClock.elapsedRealtime()
                 val snap = stableRosterSnapshot()
                 val origs = if (settings.backupOriginals) withContext(Dispatchers.IO) { originalSources(root, snap) } else emptyList()
-                val name = backups.write(backupStorage(root), snap, settings.backupPrefix, originals = origs)
+                val name = backups.write(backupStorage(root), snap, settings.backupPrefix, originals = origs, onProgress = { backupProgress = it })
                 Ops.log(
-                    "op", "name", "backup", "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tb, "n", name.photos,
+                    "op", "name", "backup", "ok", true, "ms", SystemClock.elapsedRealtime() - tb, "n", name.photos,
                     "captured", name.captured, "retake", snap.sumOf { c -> c.students.count { it.retake } },
                     "boxes", snap.sumOf { c -> c.students.count { it.box != null } }
                 )
@@ -1033,6 +1047,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Throwable) {
                 Ops.log("op", "name", "backup", "ok", false, "err", (e.message ?: e.javaClass.simpleName).take(200))
                 say("Yedek alınamadı: ${e.message ?: e.javaClass.simpleName}")
+            } finally {
+                backupProgress = null
             }
         }
     }
@@ -1119,8 +1135,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                         val f = Naming.privatePhoto(ctx, c.id, st.no)
                         if (!f.exists()) DataAudit.Photo.MISSING
                         else {
-                            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                            android.graphics.BitmapFactory.decodeFile(f.path, o)
+                            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeFile(f.path, o)
                             if (o.outWidth != TARGET_W || o.outHeight != TARGET_H) DataAudit.Photo.BAD_SIZE else DataAudit.Photo.OK
                         }
                     },
@@ -1199,7 +1215,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 ?: Output.findFile(ctx, root, listOf(OriginalsRules.classDir(c), ORIGINALS_DIR), OriginalsRules.stem(st), "${st.no}-")
                 ?: continue
             val name = OriginalsRules.fileName(st, Output.displayName(ctx, uri))
-            out.add(OriginalFile(OriginalsRules.item(c, st, name)) { ctx.contentResolver.openInputStream(uri) })
+            val size = try { ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length.coerceAtLeast(0L) } ?: 0L } catch (_: Exception) { 0L }
+            out.add(OriginalFile(OriginalsRules.item(c, st, name), size) { ctx.contentResolver.openInputStream(uri) })
         }
         return out
     }
@@ -1301,7 +1318,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val oid = Ops.id(cap.no)
         Ops.log(
             "save_start", "id", oid, "score", newScore, "hard", cap.hardCodes, "soft", cap.softCodes, "auto", cap.auto,
-            "reviewMs", if (cap.shownAt > 0) android.os.SystemClock.elapsedRealtime() - cap.shownAt else -1, "retake", warned
+            "reviewMs", if (cap.shownAt > 0) SystemClock.elapsedRealtime() - cap.shownAt else -1, "retake", warned
         )
 
         // Hız: öğrenci hemen "çekildi" sayılıp sıradakine geçilir; dosyalar arka planda (sırayla) yazılır.
@@ -1316,10 +1333,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
         viewModelScope.launch {
             saveMutex.withLock {
-                val tSave = android.os.SystemClock.elapsedRealtime()
+                val tSave = SystemClock.elapsedRealtime()
                 try {
                     val saved = withContext(Dispatchers.IO) { photoSaver.save(root, cls, st, cap.source, cap.fromSaved, px, iw, ih, box, set) }
-                    Ops.log("save", "id", oid, "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tSave, "warn", saved.warnings.size)
+                    Ops.log("save", "id", oid, "ok", true, "ms", SystemClock.elapsedRealtime() - tSave, "warn", saved.warnings.size)
                     pendingCaptureOriginals.remove(captureKey(cap.classId, cap.no))
                     updateStudent(cap.classId, cap.no) {
                         // updatedAt yenilenir: küçük resim dosya yazıldıktan sonra yeniden okunur
@@ -1331,7 +1348,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     throw e
                 } catch (e: Throwable) {
                     Ops.log(
-                        "save", "id", oid, "ok", false, "ms", android.os.SystemClock.elapsedRealtime() - tSave,
+                        "save", "id", oid, "ok", false, "ms", SystemClock.elapsedRealtime() - tSave,
                         "err", (e.message ?: e.javaClass.simpleName).take(200)
                     )
                     pendingCaptureOriginals.remove(captureKey(cap.classId, cap.no))

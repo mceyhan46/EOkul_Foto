@@ -3,6 +3,7 @@ package com.eokul.studio
 import android.content.Context
 import android.net.Uri
 import com.eokul.studio.core.BackupNames
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -64,7 +65,7 @@ class RootMigration(private val ctx: Context) {
             val name = OriginalsRules.fileName(st, Output.displayName(ctx, src))
             try {
                 val u = Output.writeStream(ctx, newRoot, path, name, OriginalsRules.mime(name)) { out ->
-                    (ctx.contentResolver.openInputStream(src) ?: throw java.io.IOException("Açılamadı: $name")).use { it.copyTo(out) }
+                    (ctx.contentResolver.openInputStream(src) ?: throw IOException("Açılamadı: $name")).use { it.copyTo(out) }
                 }
                 uris[c.id to st.no] = u.toString()
                 orig++
@@ -80,7 +81,7 @@ class RootMigration(private val ctx: Context) {
             if (!name.endsWith(".zip", true) || name in haveBackups) continue
             try {
                 Output.writeStream(ctx, newRoot, listOf(BackupNames.FOLDER), name, "application/zip") { out ->
-                    (ctx.contentResolver.openInputStream(src) ?: throw java.io.IOException("Açılamadı: $name")).use { it.copyTo(out) }
+                    (ctx.contentResolver.openInputStream(src) ?: throw IOException("Açılamadı: $name")).use { it.copyTo(out) }
                 }
                 bak++
             } catch (e: CancellationException) {

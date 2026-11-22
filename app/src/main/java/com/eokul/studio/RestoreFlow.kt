@@ -3,6 +3,7 @@ package com.eokul.studio
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -10,6 +11,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 /**
@@ -31,17 +35,17 @@ fun rememberRestoreFlow(studio: StudioViewModel): () -> Unit {
     }
     val rs = confirmRestore
     if (rs != null) {
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { confirmRestore = null },
             title = { Text("Yedekten geri yüklensin mi?") },
             text = {
                 val ri = restoreInfo
-                val dateFmt = java.text.SimpleDateFormat("d MMM yyyy HH:mm", java.util.Locale.forLanguageTag("tr"))
+                val dateFmt = SimpleDateFormat("d MMM yyyy HH:mm", Locale.forLanguageTag("tr"))
                 Text(
                     (if (ri != null)
                         "Yedekte: ${ri.classes} sınıf · ${ri.students} öğrenci (${ri.captured} fotoğraflı · ${ri.retake} tekrar işaretli)" +
                             (if (ri.originals > 0) " · ${ri.originals} orijinal" else " · orijinal yok") +
-                            (ri.createdMs?.let { " · " + dateFmt.format(java.util.Date(it)) } ?: "") +
+                            (ri.createdMs?.let { " · " + dateFmt.format(Date(it)) } ?: "") +
                             (if (ri.appVersion.isNotBlank()) " · sürüm ${ri.appVersion}" else "") + "\n"
                     else "") +
                         "Şu an uygulamada: ${studio.classes.size} sınıf · ${studio.classes.sumOf { it.students.size }} öğrenci\n\n" +

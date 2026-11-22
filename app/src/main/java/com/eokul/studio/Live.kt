@@ -1,5 +1,12 @@
 package com.eokul.studio
 
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.Rect
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 
@@ -25,9 +32,9 @@ class LiveFace(
 }
 
 /** Telefonun kendi hareketi (jiroskop, rad/sn). Yüz sabit görünürken el titremesini ayrıca yakalar. */
-class MotionMonitor(ctx: android.content.Context) : android.hardware.SensorEventListener {
-    private val sm = ctx.getSystemService(android.content.Context.SENSOR_SERVICE) as? android.hardware.SensorManager
-    private val gyro = sm?.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE)
+class MotionMonitor(ctx: android.content.Context) : SensorEventListener {
+    private val sm = ctx.getSystemService(android.content.Context.SENSOR_SERVICE) as? SensorManager
+    private val gyro = sm?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
     @Volatile
     var level = 0f
@@ -37,20 +44,20 @@ class MotionMonitor(ctx: android.content.Context) : android.hardware.SensorEvent
     val steady: Boolean get() = gyro == null || level < STEADY_LIMIT
 
     fun start() {
-        if (gyro != null) sm?.registerListener(this, gyro, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+        if (gyro != null) sm?.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME)
     }
 
     fun stop() {
         sm?.unregisterListener(this)
     }
 
-    override fun onSensorChanged(e: android.hardware.SensorEvent) {
+    override fun onSensorChanged(e: SensorEvent) {
         val v = e.values
         val m = Math.sqrt((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).toDouble()).toFloat()
         level = level * 0.8f + m * 0.2f   // yumuşatma
     }
 
-    override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     companion object {
         const val STEADY_LIMIT = 0.22f
@@ -58,14 +65,14 @@ class MotionMonitor(ctx: android.content.Context) : android.hardware.SensorEvent
 }
 
 /** Yüz bölgesinin netlik / parlaklık / kontrast ölçümü (çerçeve dönüşü uygulanır). Başarısızsa null. */
-fun measureFace(bmp: android.graphics.Bitmap, rot: Int, r: android.graphics.Rect): com.eokul.studio.core.Quality.Report? {
-    var upright: android.graphics.Bitmap? = null
-    var crop: android.graphics.Bitmap? = null
+fun measureFace(bmp: Bitmap, rot: Int, r: Rect): com.eokul.studio.core.Quality.Report? {
+    var upright: Bitmap? = null
+    var crop: Bitmap? = null
     return try {
         upright = if (rot == 0) bmp else {
-            val m = android.graphics.Matrix()
+            val m = Matrix()
             m.postRotate(rot.toFloat())
-            android.graphics.Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+            Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
         }
         val x = Math.max(0, r.left)
         val y = Math.max(0, r.top)
@@ -74,7 +81,7 @@ fun measureFace(bmp: android.graphics.Bitmap, rot: Int, r: android.graphics.Rect
         if (w < 48 || h < 48) {
             null
         } else {
-            crop = android.graphics.Bitmap.createBitmap(upright, x, y, w, h)
+            crop = Bitmap.createBitmap(upright, x, y, w, h)
             val px = IntArray(w * h)
             crop.getPixels(px, 0, w, 0, 0, w, h)
             com.eokul.studio.core.Quality.analyze(px, w, h, doubleArrayOf(0.0, 0.0, w.toDouble(), h.toDouble()))
@@ -91,9 +98,9 @@ fun measureFace(bmp: android.graphics.Bitmap, rot: Int, r: android.graphics.Rect
  * Tüm karenin küçültülmüş hâlinden yüz/arka plan ışık dengesini ölçer (arka ışık, yan ışık, parlama).
  * Önce küçültüp sonra döndürür; tam boy döndürme yapılmaz (ucuz). Başarısızsa null.
  */
-fun measureLight(bmp: android.graphics.Bitmap, rot: Int, r: android.graphics.Rect): com.eokul.studio.core.Lighting.Report? {
-    var small: android.graphics.Bitmap? = null
-    var upright: android.graphics.Bitmap? = null
+fun measureLight(bmp: Bitmap, rot: Int, r: Rect): com.eokul.studio.core.Lighting.Report? {
+    var small: Bitmap? = null
+    var upright: Bitmap? = null
     return try {
         val sideways = rot % 180 != 0
         val uw = (if (sideways) bmp.height else bmp.width).toFloat()
@@ -101,11 +108,11 @@ fun measureLight(bmp: android.graphics.Bitmap, rot: Int, r: android.graphics.Rec
         val sw = 96
         val sh = Math.max(16, Math.round(sw * uh / uw))
         // Önce sensör yönünde küçült, sonra küçük görüntüyü döndür
-        small = android.graphics.Bitmap.createScaledBitmap(bmp, if (sideways) sh else sw, if (sideways) sw else sh, true)
+        small = Bitmap.createScaledBitmap(bmp, if (sideways) sh else sw, if (sideways) sw else sh, true)
         upright = if (rot == 0) small else {
-            val m = android.graphics.Matrix()
+            val m = Matrix()
             m.postRotate(rot.toFloat())
-            android.graphics.Bitmap.createBitmap(small, 0, 0, small.width, small.height, m, true)
+            Bitmap.createBitmap(small, 0, 0, small.width, small.height, m, true)
         }
         val w = upright.width
         val h = upright.height
