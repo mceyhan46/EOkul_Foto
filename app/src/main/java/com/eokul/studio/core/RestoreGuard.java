@@ -13,16 +13,21 @@ public final class RestoreGuard {
     public static final int MAX_ENTRIES = 50_000;
     public static final long MAX_PHOTO = 5L * 1024 * 1024;
     public static final long MAX_META = 30L * 1024 * 1024;
-    public static final long MAX_TOTAL = 800L * 1024 * 1024;
+    public static final long MAX_ORIGINAL = 16L * 1024 * 1024;
+    public static final long MAX_TOTAL = 3L * 1024 * 1024 * 1024;
 
-    public enum Kind { ROSTER, MANIFEST, PHOTO, OTHER }
+    public enum Kind { ROSTER, MANIFEST, PHOTO, ORIGINAL, OTHER }
+
+    public static final String PHOTOS_PREFIX = "photos/";
+    public static final String ORIGINALS_PREFIX = "originals/";
 
     private RestoreGuard() {}
 
     public static Kind classify(String name) {
         if (name.equals(BackupZip.ROSTER)) return Kind.ROSTER;
         if (name.equals(BackupZip.MANIFEST)) return Kind.MANIFEST;
-        if (name.startsWith("photos/")) return Kind.PHOTO;
+        if (name.startsWith(PHOTOS_PREFIX)) return Kind.PHOTO;
+        if (name.startsWith(ORIGINALS_PREFIX)) return Kind.ORIGINAL;
         return Kind.OTHER;
     }
 
@@ -34,6 +39,21 @@ public final class RestoreGuard {
         }
         for (String part : rel.split("/", -1)) {
             if (part.trim().isEmpty() || part.equals(".") || part.equals("..")) throw new IOException("Geçersiz fotoğraf yolu");
+        }
+        return rel;
+    }
+
+    /** "originals/" sonrası "sınıfKlasörü/dosyaAdı" (tam iki parça); güvensiz yol ya da başka derinlik IOException. */
+    public static String originalRelativePath(String entryName) throws IOException {
+        if (!entryName.startsWith(ORIGINALS_PREFIX)) throw new IOException("Geçersiz orijinal yolu");
+        String rel = entryName.substring(ORIGINALS_PREFIX.length());
+        if (rel.trim().isEmpty() || rel.startsWith("/") || rel.indexOf('\\') >= 0 || rel.indexOf('\0') >= 0) {
+            throw new IOException("Geçersiz orijinal yolu");
+        }
+        String[] parts = rel.split("/", -1);
+        if (parts.length != 2) throw new IOException("Geçersiz orijinal yolu");
+        for (String part : parts) {
+            if (part.trim().isEmpty() || part.equals(".") || part.equals("..")) throw new IOException("Geçersiz orijinal yolu");
         }
         return rel;
     }
@@ -72,6 +92,7 @@ public final class RestoreGuard {
                 throw new IOException("Liste veya manifest dosyası beklenenden büyük");
             }
             if (currentKind == Kind.PHOTO && current > MAX_PHOTO) throw new IOException("Fotoğraf dosyası beklenenden büyük");
+            if (currentKind == Kind.ORIGINAL && current > MAX_ORIGINAL) throw new IOException("Orijinal fotoğraf beklenenden büyük");
         }
 
         public int entries() { return entries; }

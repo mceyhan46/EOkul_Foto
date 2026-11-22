@@ -95,4 +95,20 @@ public class RestoreGuardTest {
         b.enter("photos/c/2.jpg");
         b.add((int) RestoreGuard.MAX_PHOTO);
     }
+
+    @Test public void originalEntriesAreClassifiedAndPathChecked() throws Exception {
+        assertEquals(RestoreGuard.Kind.ORIGINAL, RestoreGuard.classify("originals/9-A/1-Ali.jpg"));
+        assertEquals("9-A/1-Ali.jpg", RestoreGuard.originalRelativePath("originals/9-A/1-Ali.jpg"));
+        for (String bad : new String[] {"originals/", "originals/a", "originals/a/b/c.jpg", "originals/../x.jpg",
+                "originals/a/..", "originals//x.jpg", "originals/a\\b.jpg", "photos/a/b.jpg"}) {
+            try { RestoreGuard.originalRelativePath(bad); fail(bad); } catch (IOException expected) { }
+        }
+    }
+
+    @Test public void originalSizeLimitIsHigherThanPhotoButFinite() throws Exception {
+        RestoreGuard.Budget b = new RestoreGuard.Budget();
+        b.enter("originals/a/b.jpg");
+        b.add((int) RestoreGuard.MAX_ORIGINAL);
+        try { b.add(1); fail(); } catch (IOException expected) { }
+    }
 }

@@ -51,9 +51,6 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         if (uri != null) studio.saveReportTo(uri)
     }
     val shareCtx = androidx.compose.ui.platform.LocalContext.current
-    val rootPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
-        if (uri != null) studio.setRootFolder(uri)
-    }
     val cur = vm.settings
     val def = Settings()
 
@@ -80,6 +77,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
     var accScore by remember { mutableStateOf(cur.autoAcceptScore.toFloat()) }
     var accDelay by remember { mutableStateOf(cur.autoAcceptDelayMs.toFloat()) }
     var keepOrig by remember { mutableStateOf(cur.keepOriginals) }
+    var backupOrig by remember { mutableStateOf(cur.backupOriginals) }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun build(): Settings? {
@@ -112,6 +110,7 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             autoTol = (autoTol * 100.0).roundToInt() / 100.0,
             autoHoldMs = ((autoHold / 100f).roundToInt() * 100).coerceIn(400, 4000),
             keepOriginals = keepOrig,
+            backupOriginals = backupOrig,
             smartShot = smart,
             flipCapture = flipCap,
             flipFront = flipFront,
@@ -155,13 +154,18 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
         // ---------------- Kayıt (sınıf akışı)
         SettingsCard("Genel", "Kayıt klasörü ve çekim akışı") {
         Text(
-            "Kayıt klasörü: ${studio.rootName ?: "seçilmedi"}",
+            "Kayıt klasörü: ${studio.rootName ?: "kurulmadı"}",
             style = MaterialTheme.typography.bodyMedium
         )
+        RootRules.problem(studio.rootState)?.let {
+            if (studio.rootState != RootRules.State.NOT_SET) Text("⚠ $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
         Spacer(Modifier.size(4.dp))
-        OutlinedButton(onClick = { rootPicker.launch(null) }) { Text("Klasör seç / değiştir") }
+        OutlinedButton(onClick = {
+            if (studio.rootState == RootRules.State.NOT_SET) studio.openRootSetup() else studio.rootChooserOpen = true
+        }) { Text(if (studio.rootState == RootRules.State.NOT_SET) "Klasörü Kur" else "Klasörü Değiştir") }
         Text(
-            "Yapı: Sınıf/12345-Ad Soyad.jpg · Sınıf/Orijinaller/12345-Ad Soyad.jpg",
+            "Yapı: Sınıf/12345-Ad Soyad.jpg · Sınıf/Orijinaller/12345-Ad Soyad.jpg. Klasörü değiştirirken istediğiniz konumu seçebilir, eski dosyaları isterseniz yeni klasöre kopyalayabilirsiniz.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.size(8.dp))
@@ -173,6 +177,14 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
             Switch(checked = keepOrig, onCheckedChange = { keepOrig = it })
             Text("  Tam çözünürlüklü orijinali sakla", style = MaterialTheme.typography.bodyMedium)
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = backupOrig, onCheckedChange = { backupOrig = it })
+            Text("  Yedeğe orijinalleri de ekle", style = MaterialTheme.typography.bodyMedium)
+        }
+        Text(
+            "Açıkken yedek dosyası daha büyük olur (öğrenci başına yaklaşık 0,3–0,9 MB) ancak başka bir klasöre/telefona geri yüklemede “Kırpmayı düzenle” çalışır.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
         }
         SettingsCard("Çekim", "Akıllı çekim, otomatik çekim ve hızlı onay") {

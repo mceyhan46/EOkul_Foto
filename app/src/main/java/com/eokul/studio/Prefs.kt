@@ -32,6 +32,8 @@ data class Settings(
     val serialMode: Boolean = true,
     /** Tam çözünürlüklü orijinal fotoğrafı "Orijinaller" klasöründe sakla. */
     val keepOriginals: Boolean = true,
+    /** Yedeğe kayıt klasöründeki orijinal fotoğraflar da eklenir (geri yüklemede "Kırpmayı düzenle" çalışsın diye). */
+    val backupOriginals: Boolean = true,
     /** Yüz kılavuza oturup sabit durunca otomatik çek. */
     val autoCapture: Boolean = false,
     /** Otomatik çekim toleransı çarpanı: <1 sıkı, >1 gevşek. */
@@ -104,6 +106,7 @@ class Prefs(context: Context) {
             rootUri = sp.getString("rootUri", null)?.takeIf { it.isNotBlank() },
             serialMode = sp.getBoolean("serialMode", d.serialMode),
             keepOriginals = sp.getBoolean("keepOriginals", d.keepOriginals),
+            backupOriginals = sp.getBoolean("backupOriginals", d.backupOriginals),
             autoCapture = sp.getBoolean("autoCapture", d.autoCapture),
             autoTol = (sp.getString("autoTol", null)?.toDoubleOrNull() ?: d.autoTol).coerceIn(0.5, 2.0),
             autoHoldMs = sp.getInt("autoHoldMs", d.autoHoldMs).coerceIn(400, 4000),
@@ -138,6 +141,7 @@ class Prefs(context: Context) {
             .putString("rootUri", s.rootUri)
             .putBoolean("serialMode", s.serialMode)
             .putBoolean("keepOriginals", s.keepOriginals)
+            .putBoolean("backupOriginals", s.backupOriginals)
             .putBoolean("autoCapture", s.autoCapture)
             .putString("autoTol", s.autoTol.toString())
             .putInt("autoHoldMs", s.autoHoldMs)

@@ -2,13 +2,11 @@ package com.eokul.studio
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.eokul.studio.core.RosterParser
@@ -121,7 +119,6 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         }
         classes.addAll(store.load())
         startupNote = listOfNotNull(store.loadNote, recoveryError).joinToString("\n\n").ifBlank { null }
-        refreshRootName()
     }
 
     fun updateSettings(s: Settings) {
@@ -139,6 +136,16 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Uygulama arka plandan dönerse ve 30 sn'den uzun kaldıysa kilitler. */
     fun onForegrounded() {
+        if (pendingRootSetup) {
+            // "Tüm dosyalara erişim" sayfasından dönüldü
+            pendingRootSetup = false
+            if (rootFolder.hasAllFilesAccess()) applyRootSetup { rootFolder.setupRoot() }
+            else {
+                rootSetupBusy = false
+                rootSetupNote = "İzin verilmedi. “İzin Ver ve Başla”ya tekrar dokunup anahtarı açın veya Belgeler klasörünü seçin."
+                if (settings.rootUri != null) say("İzin verilmedi; kayıt klasörü değişmedi")
+            }
+        } else refreshRoot()
         if (PinLock.shouldLock(settings.pinHash != null, backgroundedAt, System.currentTimeMillis())) locked = true
     }
 
@@ -317,39 +324,201 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     /** Seçili kayıt klasörü; seçilmemişse null. */
     private val rootUri: Uri? get() = settings.rootUri?.let { Uri.parse(it) }
 
-    /** Kayıt klasörü seçili değilse kullanıcıya söyler ve null döner. */
-    private fun requireRoot(): Uri? = rootUri ?: run {
-        say("Önce kayıt klasörünü seçin")
-        null
+    private val rootFolder by lazy { RootFolder(ctx) }
+    private var rootPrompted = false
+    private var pendingRootSetup = false
+    private var rootRefreshGen = 0
+
+    /** Kayıt klasörünün güncel durumu (açılışta, ekrana dönüşte ve kurulumdan sonra [refreshRoot] günceller). */
+    var rootState by mutableStateOf(RootRules.State.NOT_SET)
+        private set
+
+    /** true ise uygulama genelinde tam ekran "Kayıt klasörü kurulumu" gösterilir. */
+    var rootSetupRequested by mutableStateOf(false)
+
+    /** Kurulum sürüyor (izin bekleniyor / klasör açılıyor). */
+    var rootSetupBusy by mutableStateOf(false)
+        private set
+
+    /** Kurulum ekranını açar (eski uyarıyı temizler). */
+    fun openRootSetup() {
+        rootSetupNote = null
+        rootSetupRequested = true
     }
 
-    private fun refreshRootName() {
+    /** Kurulum ekranında gösterilen son hata/uyarı. */
+    var rootSetupNote by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Kayıt klasörü kullanılabilir değilse kurulum penceresini açar ve null döner. Eksik alt klasör
+     * (EOkul_Studio silinmişse) sessizce yeniden açılmaya çalışılır.
+     */
+    private fun requireRoot(): Uri? {
         val u = rootUri
-        rootName = if (u == null) null else try {
-            DocumentFile.fromTreeUri(ctx, u)?.name
-        } catch (e: Exception) {
-            null
+        if (u != null && rootState == RootRules.State.READY) return u
+        say(RootRules.problem(rootState) ?: "Önce kayıt klasörünü kurun")
+        openRootSetup()
+        return null
+    }
+
+    /** Durumu ve gösterilen yolu yeniler; EOkul_Studio klasörü silinmişse yeniden oluşturur. */
+    fun refreshRoot() {
+        val gen = ++rootRefreshGen
+        viewModelScope.launch {
+            val stored = settings.rootUri
+            val (state, label, repaired) = withContext(Dispatchers.IO) {
+                var st = rootFolder.status(stored)
+                var fixed = false
+                if (st == RootRules.State.MISSING && stored != null && rootFolder.repair(stored)) {
+                    st = rootFolder.status(stored)
+                    fixed = st == RootRules.State.READY
+                }
+                Triple(st, rootFolder.label(stored), fixed)
+            }
+            if (gen != rootRefreshGen) return@launch   // daha yeni bir yenileme başladı; bu sonuç bayat
+            rootState = state
+            rootName = label
+            // İlk açılışta (kurulum yok) bir kez kurulum penceresi açılır
+            if (state == RootRules.State.NOT_SET && !rootPrompted && !locked) {
+                rootPrompted = true
+                openRootSetup()
+            }
+            if (repaired) say("✓ ${RootRules.DEFAULT_SUB} klasörü yeniden oluşturuldu")
         }
     }
 
-    fun hasRootAccess(): Boolean {
-        val u = rootUri ?: return false
-        return ctx.contentResolver.persistedUriPermissions.any { it.uri == u && it.isWritePermission }
+    /** Kullanıcının seçtiği klasörü kurar (içinde EOkul_Studio açar); eski izni bırakır. */
+    fun setRootFolder(uri: Uri, direct: Boolean = false) = applyRootSetup { rootFolder.setup(uri, direct) }
+
+    /** Kök dizin kipi: izin varsa hemen kurar; yoksa [launchSettings] ile izin sayfasını açar ve dönüşte kurulumu tamamlar. */
+    fun setupRootDirectly(launchSettings: (android.content.Intent) -> Unit) {
+        if (rootFolder.hasAllFilesAccess()) {
+            applyRootSetup { rootFolder.setupRoot() }
+        } else {
+            pendingRootSetup = true
+            rootSetupBusy = true
+            rootSetupNote = null
+            launchSettings(rootFolder.allFilesAccessIntent())
+        }
     }
 
-    fun setRootFolder(uri: Uri) {
-        try {
-            ctx.contentResolver.takePersistableUriPermission(
-                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+    /** Bu telefonda kök dizin kipi sunulabilir mi? */
+    val canUseRootMode: Boolean get() = rootFolder.canUseRoot()
+
+    /** "Klasörü Değiştir" seçenek penceresi açık mı? */
+    var rootChooserOpen by mutableStateOf(false)
+
+    /** Yeni klasör seçildi, kullanıcının onayı bekleniyor (eski klasör ayarda duruyor). */
+    class RootChange(val encoded: String, val label: String, val found: RootRules.Found)
+
+    var pendingRootChange by mutableStateOf<RootChange?>(null)
+        private set
+
+    private val rootMigration by lazy { RootMigration(ctx) }
+
+    private fun applyRootSetup(setup: () -> RootFolder.Setup) {
+        viewModelScope.launch {
+            val old = settings.rootUri
+            rootSetupBusy = true
+            rootSetupNote = null
+            val result = withContext(Dispatchers.IO) { runCatching(setup) }
+            val done = result.getOrElse {
+                Ops.error("root_setup", it)
+                rootSetupBusy = false
+                rootSetupNote = it.message ?: "Klasör kurulamadı"
+                if (old != null) say("⚠ ${rootSetupNote}")
+                return@launch
+            }
+            rootSetupBusy = false
+            if (old == done.encoded) {
+                rootSetupRequested = false
+                say("Bu klasör zaten kullanılıyor")
+                return@launch
+            }
+            if (old != null && rootState != RootRules.State.NOT_SET) {
+                // Klasör değişiyor: ne bulunduğunu göster, kullanıcı karar versin (ayar henüz değişmedi)
+                val snap = classes.toList()
+                val (label, found) = withContext(Dispatchers.IO) {
+                    rootFolder.label(done.encoded).orEmpty() to rootMigration.inspect(Uri.parse(done.encoded), snap)
+                }
+                rootSetupRequested = false
+                rootChooserOpen = false
+                pendingRootChange = RootChange(done.encoded, label, found)
+                return@launch
+            }
+            commitRoot(done.encoded, old)
+            val where = withContext(Dispatchers.IO) { rootFolder.label(done.encoded) }
+            say(
+                if (done.reused) "✓ Mevcut klasör bulundu: $where. Yedek veya klasör içeriğinden devam edebilirsiniz."
+                else "✓ Kayıt klasörü hazır: $where"
             )
-        } catch (e: Exception) {
-            say("Klasör izni alınamadı")
-            return
         }
-        SettingsState.update(settings.copy(rootUri = uri.toString()))
-        refreshRootName()
-        say("✓ Kayıt klasörü: ${rootName ?: "seçildi"}")
     }
+
+    /** Yeni klasörü ayara işler, eski izni (başka bir yerse) bırakır ve durumu yeniler. */
+    private suspend fun commitRoot(encoded: String, old: String?) {
+        SettingsState.update(settings.copy(rootUri = encoded))
+        if (old != null && RootRules.decode(old).base != RootRules.decode(encoded).base) {
+            withContext(Dispatchers.IO) { rootFolder.release(old) }
+        }
+        rootSetupRequested = false
+        rootChooserOpen = false
+        refreshRoot()
+    }
+
+    /**
+     * Klasör değişikliğini onaylar. [copy] true ise eski klasördeki orijinaller ve yedekler yenisine kopyalanır, eksik
+     * fotoğraflar yazılır; her durumda yeni klasörde bulunan orijinaller öğrencilere yeniden bağlanır. Eski dosyalar silinmez.
+     */
+    fun confirmRootChange(copy: Boolean) {
+        val change = pendingRootChange ?: return
+        val old = settings.rootUri
+        pendingRootChange = null
+        viewModelScope.launch {
+            rootSetupBusy = true
+            say(if (copy) "Dosyalar yeni klasöre kopyalanıyor…" else "Klasör bağlanıyor…")
+            val snap = classes.toList()
+            val newRoot = Uri.parse(change.encoded)
+            val (report, relinked, wrote) = withContext(Dispatchers.IO) {
+                saveMutex.withLock {
+                    val rep = if (copy && old != null) rootMigration.copy(Uri.parse(old), newRoot, snap) else null
+                    val uris = HashMap<Pair<String, String>, String>(rootMigration.relink(newRoot, snap))
+                    rep?.uris?.let { uris.putAll(it) }
+                    val w = if (copy) rewriteMissingFolderFiles(newRoot, snap) else 0 to 0
+                    Triple(rep, uris, w)
+                }
+            }
+            if (relinked.isNotEmpty()) {
+                replaceClasses(OriginalsRules.applyUris(classes.toList(), relinked))
+                rosterVersion.incrementAndGet()
+            }
+            rootSetupBusy = false
+            commitRoot(change.encoded, old)
+            Ops.log("op", "name", "root_change", "ok", (report?.failed ?: 0) == 0, "copy", copy, "linked", relinked.size)
+            val notes = ArrayList<String>()
+            if (relinked.isNotEmpty()) notes.add("${relinked.size} orijinal bağlandı")
+            if (report != null && report.copiedOriginals > 0) notes.add("${report.copiedOriginals} orijinal kopyalandı")
+            if (report != null && report.copiedBackups > 0) notes.add("${report.copiedBackups} yedek kopyalandı")
+            if (wrote.first > 0) notes.add("${wrote.first} fotoğraf yazıldı")
+            val failed = (report?.failed ?: 0) + wrote.second
+            if (failed > 0) notes.add("$failed dosya aktarılamadı")
+            say("✓ Kayıt klasörü: ${change.label}" + if (notes.isEmpty()) "" else "\n" + notes.joinToString(" · "))
+        }
+    }
+
+    /** Klasör değişikliğinden vazgeçilir; yeni alınan izin (eskisinden farklıysa) bırakılır. */
+    fun cancelRootChange() {
+        val change = pendingRootChange ?: return
+        pendingRootChange = null
+        val old = settings.rootUri
+        if (old == null || RootRules.decode(old).base != RootRules.decode(change.encoded).base) {
+            viewModelScope.launch { withContext(Dispatchers.IO) { rootFolder.release(change.encoded) } }
+        }
+    }
+
+    /** Seçici "Belgeler"de açılsın. */
+    val pickerHint: Uri get() = RootFolder.documentsHint()
 
     // ------------------------------------------------------------------ sınıflar
     private fun newId(): String =
@@ -846,7 +1015,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 saveMutex.withLock {
                 val tb = android.os.SystemClock.elapsedRealtime()
                 val snap = stableRosterSnapshot()
-                val name = backups.write(backupStorage(root), snap, settings.backupPrefix)
+                val origs = if (settings.backupOriginals) withContext(Dispatchers.IO) { originalSources(root, snap) } else emptyList()
+                val name = backups.write(backupStorage(root), snap, settings.backupPrefix, originals = origs)
                 Ops.log(
                     "op", "name", "backup", "ok", true, "ms", android.os.SystemClock.elapsedRealtime() - tb, "n", name.photos,
                     "captured", name.captured, "retake", snap.sumOf { c -> c.students.count { it.retake } },
@@ -854,7 +1024,9 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 )
                 SettingsState.update(settings.copy(lastBackupMs = System.currentTimeMillis()))
                 say("✓ Yedek alındı ve doğrulandı: ${name.name}\n${name.photos} fotoğraf · ${name.captured} çekilmiş öğrenci · ${snap.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · ${snap.sumOf { c -> c.students.count { it.retake } }} tekrar işaretli.\n" +
-                    "Dosya kayıt klasörünüzdeki \"Yedek\" klasöründe durur; uygulamayı silseniz de kalır. Tam çözünürlüklü orijinaller yedeğe girmez, kayıt klasöründe kalır.")
+                    "Dosya kayıt klasörünüzdeki \"Yedek\" klasöründe durur; uygulamayı silseniz de kalır. " +
+                    (if (settings.backupOriginals) "${name.originals} orijinal fotoğraf da yedeğe eklendi (Kırpmayı düzenle geri yüklemede çalışır)."
+                    else "Orijinal fotoğraflar yedeğe eklenmedi (Ayarlar'dan açılabilir)."))
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -907,11 +1079,13 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                     "boxes", restored.classes.sumOf { c -> c.students.count { it.box != null } }
                 )
                 if (safety != null) rootUri?.let { pruneSafetyBackups(it) }
+                val folderNote = materializeRestored(restored)
                 say(
                     "✓ ${restored.classes.size} sınıf geri yüklendi · ${restored.classes.sumOf { c -> c.students.count { it.captured } }} çekilmiş öğrenci · " +
                         "${restored.classes.sumOf { c -> c.students.count { it.box != null } }} kırpma kaydı · " +
                         "${restored.classes.sumOf { c -> c.students.count { it.retake } }} tekrar işaretli" +
                         (if (restored.skippedPhotos > 0) " (${restored.skippedPhotos} bozuk fotoğraf atlandı)" else "") +
+                        folderNote +
                         (if (safety != null) "\nÖnceki verinizin güvenlik kopyası: $safety" else "")
                 )
                 }
@@ -977,39 +1151,107 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val root = requireRoot() ?: return
         val snap = classes.toList()
         viewModelScope.launch {
-            val (fixed, lost) = withContext(Dispatchers.IO) {
-                saveMutex.withLock {
-                    var fixed = 0
-                    var lost = 0
-                    for (c in snap) {
-                        val dirName = RosterParser.sanitizeFileName(c.name)
-                        val have = (Output.listNames(ctx, root, listOf(dirName)) ?: emptyList()).toHashSet()
-                        for ((s, stem) in DataAudit.missingInFolder(c, have)) {
-                            val priv = Naming.privatePhoto(ctx, c.id, s.no)
-                            if (!priv.exists() || priv.length() <= 0L) { lost++; continue }
-                            try {
-                                Output.writeStream(ctx, root, listOf(dirName), "$stem.jpg", "image/jpeg") { out ->
-                                    priv.inputStream().use { it.copyTo(out) }
-                                }
-                                fixed++
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Throwable) {
-                                Ops.error("repair", e)
-                                lost++
-                            }
-                        }
-                    }
-                    fixed to lost
-                }
-            }
+            val (fixed, lost) = withContext(Dispatchers.IO) { saveMutex.withLock { rewriteMissingFolderFiles(root, snap) } }
             Ops.log("op", "name", "repair", "ok", lost == 0, "n", fixed, "err", if (lost > 0) "lost=$lost" else null)
             say(
                 if (fixed == 0 && lost == 0) "Kayıt klasöründe eksik fotoğraf yok."
                 else "✓ $fixed fotoğraf kayıt klasörüne yeniden yazıldı." + (if (lost > 0) " $lost öğrenci için kopya bulunamadı; yeniden çekin." else "") +
-                    " Orijinaller geri getirilemez; “Kırpmayı düzenle” için yeniden çekin."
+                    " Orijinaller bu işlemle geri gelmez; yedekten geri yüklemek veya yeniden çekmek gerekir."
             )
         }
+    }
+
+    /** Kilit almadan çalışır (çağıran [saveMutex]'i tutmalıdır). (yazılan, bulunamayan/yazılamayan) döndürür. */
+    private fun rewriteMissingFolderFiles(root: Uri, snap: List<SchoolClass>): Pair<Int, Int> {
+        var fixed = 0
+        var lost = 0
+        for (c in snap) {
+            val dirName = RosterParser.sanitizeFileName(c.name)
+            val have = (Output.listNames(ctx, root, listOf(dirName)) ?: emptyList()).toHashSet()
+            for ((s, stem) in DataAudit.missingInFolder(c, have)) {
+                val priv = Naming.privatePhoto(ctx, c.id, s.no)
+                if (!priv.exists() || priv.length() <= 0L) { lost++; continue }
+                try {
+                    Output.writeStream(ctx, root, listOf(dirName), "$stem.jpg", "image/jpeg") { out ->
+                        priv.inputStream().use { it.copyTo(out) }
+                    }
+                    fixed++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    Ops.error("repair", e)
+                    lost++
+                }
+            }
+        }
+        return fixed to lost
+    }
+
+    /**
+     * Yedeğe eklenecek orijinaller: her çekilmiş öğrenci için kayıtlı adres, yoksa kayıt klasöründeki `Sınıf/Orijinaller/` içinde
+     * dosya adıyla aranır. Açılamayanlar atlanır (yedek yine alınır).
+     */
+    private fun originalSources(root: Uri, snap: List<SchoolClass>): List<OriginalFile> {
+        val out = ArrayList<OriginalFile>()
+        for (c in snap) for (st in c.students) {
+            if (!st.captured) continue
+            val uri: Uri = st.origUri?.let { Uri.parse(it) }?.takeIf { Output.exists(ctx, it) }
+                ?: Output.findFile(ctx, root, listOf(OriginalsRules.classDir(c), ORIGINALS_DIR), OriginalsRules.stem(st), "${st.no}-")
+                ?: continue
+            val name = OriginalsRules.fileName(st, Output.displayName(ctx, uri))
+            out.add(OriginalFile(OriginalsRules.item(c, st, name)) { ctx.contentResolver.openInputStream(uri) })
+        }
+        return out
+    }
+
+    /**
+     * Geri yüklemeden sonra kayıt klasörünü yedekle uyumlu hâle getirir: yedekteki orijinalleri `Sınıf/Orijinaller/` içine yazar
+     * (öğrencilerin adreslerini günceller) ve klasörde eksik 133x171 fotoğrafları yeniden yazar. Kilit çağıranda tutulur.
+     * Kullanıcıya eklenecek kısa not döndürür.
+     */
+    private suspend fun materializeRestored(restored: RestoreOutcome): String {
+        val root = rootUri?.takeIf { rootState == RootRules.State.READY }
+        val notes = ArrayList<String>()
+        if (root == null) {
+            restored.originals.forEach { it.file.delete() }
+            File(ctx.filesDir, BackupService.ORIGINALS_STAGE).deleteRecursively()
+            return "\n⚠ Kayıt klasörü kullanılamadığı için dosyalar klasöre yazılmadı; klasörü kurduktan sonra “Eksik Klasör Dosyalarını Onar”ı çalıştırın." +
+                if (restored.originals.isNotEmpty()) " Orijinaller bu geri yüklemede klasöre aktarılamadı; yedeği klasör kurulduktan sonra yeniden geri yükleyin." else ""
+        }
+        say("Kayıt klasörü güncelleniyor… (orijinaller ve fotoğraflar yazılıyor)")
+        val (wroteOrig, failedOrig, uris) = withContext(Dispatchers.IO) {
+            var ok = 0
+            var bad = 0
+            val map = HashMap<Pair<String, String>, String>()
+            for (o in restored.originals) {
+                try {
+                    val u = Output.writeStream(ctx, root, listOf(o.item.classDir, ORIGINALS_DIR), o.item.file, OriginalsRules.mime(o.item.file)) { out ->
+                        o.file.inputStream().use { it.copyTo(out) }
+                    }
+                    map[o.item.classId to o.item.no] = u.toString()
+                    ok++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    Ops.error("restore_original", e)
+                    bad++
+                } finally {
+                    o.file.delete()
+                }
+            }
+            File(ctx.filesDir, BackupService.ORIGINALS_STAGE).deleteRecursively()
+            Triple(ok, bad, map)
+        }
+        if (uris.isNotEmpty()) {
+            replaceClasses(OriginalsRules.applyUris(classes.toList(), uris))
+            rosterVersion.incrementAndGet()
+        }
+        val (fixed, lost) = withContext(Dispatchers.IO) { rewriteMissingFolderFiles(root, classes.toList()) }
+        Ops.log("op", "name", "restore_folder", "ok", failedOrig == 0 && lost == 0, "orig", wroteOrig, "files", fixed)
+        if (wroteOrig > 0 || restored.originals.isNotEmpty()) notes.add("$wroteOrig orijinal klasöre yazıldı" + if (failedOrig > 0) " ($failedOrig yazılamadı)" else "")
+        if (fixed > 0) notes.add("$fixed fotoğraf sınıf klasörlerine yazıldı")
+        if (lost > 0) notes.add("$lost öğrenci için fotoğraf kopyası bulunamadı")
+        return if (notes.isEmpty()) "" else "\n" + notes.joinToString(" · ")
     }
 
     /** Adı değişen öğrencilerin kayıt klasöründeki dosya adlarını güncel ad soyada göre yeniden adlandırır. */

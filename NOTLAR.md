@@ -222,3 +222,9 @@ Kural: yeni iş mantığı önce 1. ya da 2. katmanda test edilerek yazılır; V
 - `PinLock` — yanlış PIN bekleme süresi (kalıcı sayaç) ve arka plan kilit kararı.
 Android uyarlayıcıları (testsiz, ince): `PhotoSaver` (SAF yazım sırası), `FolderService` (klasör/dosya silme-adlandırma), `SafBackupStorage`.
 ViewModel'de kalanlar: durum, ekran yığını, mutex/sürüm kontrollü kayıt, kamera/inceleme akışı koordinasyonu, ileti gösterimi.
+
+### Kayıt klasörü akışı (1.1.5x)
+- Kullanıcı bir klasör seçer (seçici "Belgeler"de açılır); uygulama içinde `EOkul_Studio` klasörünü kendisi açar. Seçilen klasör zaten `EOkul_Studio` ise veya içinde eski kayıt yapısı (Yedek/, Orijinaller/) varsa doğrudan o kullanılır (eski kurulumlar bozulmaz).
+- Ayarda saklanan değer: `<ağaç uri>` (eski) veya `<ağaç uri>#EOkul_Studio` (yeni). `Output.dirFor` tek giriş noktası olarak alt klasörü ekler; diğer kod değişmedi.
+- `RootRules` (saf, testli): değer biçimi, durum (NOT_SET/READY/PERMISSION_LOST/MISSING/READ_ONLY), gösterilen yol. `RootFolder`: kurulum (izin al, EOkul_Studio aç, yazma sınaması), durum denetimi, silinen alt klasörü yeniden açma, eski izni bırakma.
+- Durum her ön plana gelişte yenilenir; kullanılamıyorsa ana ekranda kart, işlem yapılırken (kamera, dışa aktarma, yedek) kurulum penceresi çıkar. İlk açılışta bir kez kurulum penceresi açılır.
