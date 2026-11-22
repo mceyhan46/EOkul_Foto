@@ -504,9 +504,9 @@ fun SettingsScreen(vm: AppViewModel, studio: StudioViewModel, showRecrop: Boolea
 /** Ayarlar bölümü: başlık, kısa açıklama ve içerik tek, sade kartta. */
 @Composable
 private fun SettingsCard(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
-    androidx.compose.material3.Card(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+    androidx.compose.material3.Card(Modifier.fillMaxWidth().padding(top = 10.dp), colors = softCardColors()) {
         Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = softColors().onGroup)
             Text(
                 subtitle, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

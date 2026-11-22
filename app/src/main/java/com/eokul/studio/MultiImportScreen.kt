@@ -160,7 +160,7 @@ fun MultiImportScreen(studio: StudioViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 1 — Dosya
-            Card(Modifier.fillMaxWidth()) {
+            Card(Modifier.fillMaxWidth(), colors = softCardColors()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("1 · Dosya", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Text(
@@ -190,7 +190,7 @@ fun MultiImportScreen(studio: StudioViewModel) {
 
             if (list != null) {
                 // 2 — Adlandırma
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth(), colors = softCardColors()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("2 · Sınıf adları", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         if (list.any { it.titleGrade != null || it.label != null }) {
@@ -234,7 +234,7 @@ fun MultiImportScreen(studio: StudioViewModel) {
                 }
 
                 // 3 — Önizleme
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth(), colors = softCardColors()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("3 · Önizleme", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         list.forEachIndexed { i, b ->
@@ -290,6 +290,7 @@ fun MultiImportScreen(studio: StudioViewModel) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = { studio.back() }, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("Vazgeç") }
                 Button(
+                    colors = softButtonColors(),
                     enabled = canImport,
                     modifier = Modifier.weight(2f).heightIn(min = 52.dp),
                     onClick = {
