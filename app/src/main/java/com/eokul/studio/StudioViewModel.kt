@@ -140,7 +140,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             // "Tüm dosyalara erişim" sayfasından dönüldü
             pendingRootSetup = false
             if (rootFolder.hasAllFilesAccess()) applyRootSetup { rootFolder.setupRoot() }
-            else say("İzin verilmedi. Kurulum için tekrar deneyin veya “Belgeler'de Kur”u seçin.")
+            else {
+                rootSetupBusy = false
+                rootSetupNote = "İzin verilmedi. “İzin Ver ve Başla”ya tekrar dokunup anahtarı açın veya Belgeler klasörünü seçin."
+            }
         } else refreshRoot()
         if (PinLock.shouldLock(settings.pinHash != null, backgroundedAt, System.currentTimeMillis())) locked = true
     }
@@ -329,8 +332,22 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     var rootState by mutableStateOf(RootRules.State.NOT_SET)
         private set
 
-    /** true ise uygulama genelinde "Kayıt klasörü kurulumu" penceresi gösterilir. */
+    /** true ise uygulama genelinde tam ekran "Kayıt klasörü kurulumu" gösterilir. */
     var rootSetupRequested by mutableStateOf(false)
+
+    /** Kurulum sürüyor (izin bekleniyor / klasör açılıyor). */
+    var rootSetupBusy by mutableStateOf(false)
+        private set
+
+    /** Kurulum ekranını açar (eski uyarıyı temizler). */
+    fun openRootSetup() {
+        rootSetupNote = null
+        rootSetupRequested = true
+    }
+
+    /** Kurulum ekranında gösterilen son hata/uyarı. */
+    var rootSetupNote by mutableStateOf<String?>(null)
+        private set
 
     /**
      * Kayıt klasörü kullanılabilir değilse kurulum penceresini açar ve null döner. Eksik alt klasör
@@ -340,7 +357,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val u = rootUri
         if (u != null && rootState == RootRules.State.READY) return u
         say(RootRules.problem(rootState) ?: "Önce kayıt klasörünü kurun")
-        rootSetupRequested = true
+        openRootSetup()
         return null
     }
 
@@ -364,7 +381,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             // İlk açılışta (kurulum yok) bir kez kurulum penceresi açılır
             if (state == RootRules.State.NOT_SET && !rootPrompted && !locked) {
                 rootPrompted = true
-                rootSetupRequested = true
+                openRootSetup()
             }
             if (repaired) say("✓ ${RootRules.DEFAULT_SUB} klasörü yeniden oluşturuldu")
         }
@@ -379,7 +396,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
             applyRootSetup { rootFolder.setupRoot() }
         } else {
             pendingRootSetup = true
-            rootSetupRequested = false
+            rootSetupBusy = true
+            rootSetupNote = null
             launchSettings(rootFolder.allFilesAccessIntent())
         }
     }
@@ -390,12 +408,16 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyRootSetup(setup: () -> RootFolder.Setup) {
         viewModelScope.launch {
             val old = settings.rootUri
+            rootSetupBusy = true
+            rootSetupNote = null
             val result = withContext(Dispatchers.IO) { runCatching(setup) }
             val done = result.getOrElse {
                 Ops.error("root_setup", it)
-                say("⚠ " + (it.message ?: "Klasör kurulamadı"))
+                rootSetupBusy = false
+                rootSetupNote = it.message ?: "Klasör kurulamadı"
                 return@launch
             }
+            rootSetupBusy = false
             if (old != null && RootRules.decode(old).base != RootRules.decode(done.encoded).base) {
                 withContext(Dispatchers.IO) { rootFolder.release(old) }
             }
