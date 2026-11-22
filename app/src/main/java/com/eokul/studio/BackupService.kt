@@ -89,8 +89,14 @@ class BackupService(
                 }
             }
             val name = BackupNames.name(prefix, now, TimeZone.getDefault(), "zip")
-            val stored = storage.write(name) { out: OutputStream ->
-                BackupZip.write(out, manifest.toByteArray(Charsets.UTF_8), rosterBytes, filesDir, photos, extras)
+            val stored = try {
+                storage.write(name) { out: OutputStream ->
+                    BackupZip.write(out, manifest.toByteArray(Charsets.UTF_8), rosterBytes, filesDir, photos, extras)
+                }
+            } catch (e: Exception) {
+                // Yazım yarıda kalırsa (ör. bir orijinal okunamadı) yarım yedek dosyası bırakılmaz.
+                try { storage.delete(name) } catch (_: Exception) { /* silinemeyen yarım dosya kritik değil */ }
+                throw e
             }
             // Yazılan ZIP yeniden açılır; tüm girdiler, manifest ve roster snapshot'ı doğrulanır.
             try {
