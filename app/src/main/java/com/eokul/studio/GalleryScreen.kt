@@ -170,7 +170,7 @@ private fun EmptyState(pickFolder: () -> Unit, pickPhotos: () -> Unit) {
 private fun PhotoCard(item: PhotoItem, vm: AppViewModel) {
     var menu by remember { mutableStateOf(false) }
     val clickable = item.ready && item.error == null && !vm.busy()
-    Card(modifier = Modifier.fillMaxWidth().clickable(enabled = clickable) { vm.openEditor(item.name) }) {
+    Card(colors = softCardColors(), modifier = Modifier.fillMaxWidth().clickable(enabled = clickable) { vm.openEditor(item.name) }) {
         Column {
             Box(Modifier.fillMaxWidth().aspectRatio(TARGET_W.toFloat() / TARGET_H)) {
                 val thumb = item.thumb
@@ -315,6 +315,7 @@ private fun BottomBar(vm: AppViewModel) {
                 }
                 Spacer(Modifier.weight(1f))
                 Button(
+                    colors = softButtonColors(),
                     onClick = { vm.requestSaveAll() },
                     enabled = vm.items.isNotEmpty() && !vm.busy()
                 ) { Text("💾 Tümünü Kaydet") }

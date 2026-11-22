@@ -170,7 +170,7 @@ fun ImportScreen(studio: StudioViewModel, classId: String?) {
                     append(when (caseMode) { CaseMode.KEEP -> "Harfler olduğu gibi"; CaseMode.TITLE -> "Ad Soyad"; CaseMode.UPPER -> "AD SOYAD" })
                 }
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    colors = softCardColors(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(Modifier.fillMaxWidth()) {
@@ -271,7 +271,7 @@ fun ImportScreen(studio: StudioViewModel, classId: String?) {
                     }
                     if (valid.isNotEmpty()) {
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            colors = softCardColors(),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -306,6 +306,7 @@ fun ImportScreen(studio: StudioViewModel, classId: String?) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = { studio.back() }, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("Vazgeç") }
                 Button(
+                    colors = softButtonColors(),
                     enabled = valid.isNotEmpty(),
                     modifier = Modifier.weight(2f).heightIn(min = 52.dp),
                     onClick = {
