@@ -32,8 +32,10 @@ fun rememberRootPicker(studio: StudioViewModel): () -> Unit {
 /** Uygulama genelinde gösterilen ilk kurulum / yeniden kurulum penceresi. */
 @Composable
 fun RootSetupDialog(studio: StudioViewModel) {
-    if (!studio.rootSetupRequested) return
+    // Seçici, pencere kapansa bile bileşimde kalmalı: aksi hâlde "Devam"a basınca pencere kapanır, seçici kaydı silinir
+    // ve seçim sonucu hiçbir yere ulaşmaz (klasör kurulmaz).
     val pick = rememberRootPicker(studio)
+    if (!studio.rootSetupRequested) return
     val problem = RootRules.problem(studio.rootState)
     AlertDialog(
         onDismissRequest = { studio.rootSetupRequested = false },

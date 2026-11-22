@@ -317,6 +317,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     private val rootFolder by lazy { RootFolder(ctx) }
     private var rootPrompted = false
+    private var rootRefreshGen = 0
 
     /** Kayıt klasörünün güncel durumu (açılışta, ekrana dönüşte ve kurulumdan sonra [refreshRoot] günceller). */
     var rootState by mutableStateOf(RootRules.State.NOT_SET)
@@ -339,6 +340,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Durumu ve gösterilen yolu yeniler; EOkul_Studio klasörü silinmişse yeniden oluşturur. */
     fun refreshRoot() {
+        val gen = ++rootRefreshGen
         viewModelScope.launch {
             val stored = settings.rootUri
             val (state, label, repaired) = withContext(Dispatchers.IO) {
@@ -350,6 +352,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 Triple(st, rootFolder.label(stored), fixed)
             }
+            if (gen != rootRefreshGen) return@launch   // daha yeni bir yenileme başladı; bu sonuç bayat
             rootState = state
             rootName = label
             // İlk açılışta (kurulum yok) bir kez kurulum penceresi açılır
