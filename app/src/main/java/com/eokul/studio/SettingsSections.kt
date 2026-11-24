@@ -64,7 +64,7 @@ fun GeneralSection(form: SettingsForm, studio: StudioViewModel) {
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = keepOrig, onCheckedChange = { keepOrig = it })
-            Text("  Tam çözünürlüklü orijinali sakla", style = MaterialTheme.typography.bodyMedium)
+            Text("  Orijinal fotoğrafı sakla (en fazla 1600 px)", style = MaterialTheme.typography.bodyMedium)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = backupOrig, onCheckedChange = { backupOrig = it })
@@ -352,7 +352,7 @@ fun SecuritySection(form: SettingsForm, vm: AppViewModel, studio: StudioViewMode
             modifier = Modifier.padding(top = 6.dp)
         )
         Text(
-            "Yedek: sınıf listeleri ve küçük fotoğraflar kayıt klasörünün içindeki “Yedek” klasörüne Ydk_160726_0816.zip gibi (gün-ay-yıl_saat-dakika) yazılır ve yazıldıktan sonra doğrulanır. Tam çözünürlüklü orijinaller, “Yedeğe orijinalleri de ekle” açıksa yedeğe girer.",
+            "Yedek: sınıf listeleri ve küçük fotoğraflar kayıt klasörünün içindeki “Yedek” klasörüne Ydk_160726_0816.zip gibi (gün-ay-yıl_saat-dakika) yazılır ve yazıldıktan sonra doğrulanır. Orijinal fotoğraflar, “Yedeğe orijinalleri de ekle” açıksa yedeğe girer.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.size(10.dp))

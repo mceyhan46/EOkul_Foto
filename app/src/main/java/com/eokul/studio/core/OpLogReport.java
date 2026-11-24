@@ -175,7 +175,7 @@ public final class OpLogReport {
         if (origFail > 0)
             findings.add("Orijinal fotoğraf " + origFail + " kayıtta SAKLANAMADI (başarılı: " + origOk + "); 'Kırpmayı düzenle' bu öğrencilerde çalışmaz. Hata: " + trunc(origErr, 120));
         if (origOff > 0)
-            findings.add("Orijinal saklama ayarı KAPALI olduğu için " + origOff + " kayıtta orijinal tutulmadı (Ayarlar > Genel > 'Tam çözünürlüklü orijinali sakla').");
+            findings.add("Orijinal saklama ayarı KAPALI olduğu için " + origOff + " kayıtta orijinal tutulmadı (Ayarlar > Genel > 'Orijinal fotoğrafı sakla').");
         if (countFailed(saves) > 0)
             findings.add(countFailed(saves) + " kayıt başarısız oldu; ilgili 'save' kayıtlarındaki hata metnine bakın.");
         if (!errors.isEmpty()) findings.add(errors.size() + " hata kaydı var: " + errorSamples(errors));

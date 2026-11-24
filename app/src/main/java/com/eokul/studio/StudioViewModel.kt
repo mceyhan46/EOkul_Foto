@@ -819,7 +819,8 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun discardCapture() {
-        capture?.let { Ops.log("discard", "id", Ops.id(it.no)) }
+        // Yalnızca yeni çekim atılırsa "vazgeçilen" sayılır; kayıtlı fotoğrafın düzenleyicisini kapatmak vazgeçme değildir.
+        capture?.takeIf { !it.fromSaved }?.let { Ops.log("discard", "id", Ops.id(it.no)) }
         captureJob?.cancel()
         capture?.temp?.delete()
         capture = null
