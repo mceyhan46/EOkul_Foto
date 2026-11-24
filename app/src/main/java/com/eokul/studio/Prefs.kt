@@ -30,7 +30,7 @@ data class Settings(
     val rootUri: String? = null,
     /** Onaydan sonra sıradaki öğrenciye otomatik geç. */
     val serialMode: Boolean = true,
-    /** Tam çözünürlüklü orijinal fotoğrafı "Orijinaller" klasöründe sakla. */
+    /** Orijinal fotoğrafı (kompakt: en fazla 1600 px) "Orijinaller" klasöründe sakla. */
     val keepOriginals: Boolean = true,
     /** Yedeğe kayıt klasöründeki orijinal fotoğraflar da eklenir (geri yüklemede "Kırpmayı düzenle" çalışsın diye). */
     val backupOriginals: Boolean = true,
