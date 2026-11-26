@@ -302,18 +302,6 @@ fun SecuritySection(form: SettingsForm, vm: AppViewModel, studio: StudioViewMode
                 supportingText = { Text("Yalnızca harf, rakam, - ve _ ; “Kaydet” ile geçerli olur") },
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.size(12.dp))
-            var guide by remember { mutableStateOf(false) }
-            SettingExpander("Yeni sürüme veya yeni telefona geçiş", guide) { guide = !guide }
-            if (guide) {
-                SettingNote(
-                    "1. “Yedekle”ye basın; “Yedek alındı ve doğrulandı” mesajını bekleyin.\n" +
-                        "2. Yedek dosyası kayıt klasörünüzde durur; uygulamayı silmek onu silmez.\n" +
-                        "3. Eski uygulamayı kaldırıp yeni APK’yı kurun (imza değiştiyse güncelleme üstüne kurulmaz).\n" +
-                        "4. Açılışta aynı kayıt klasörünü yeniden seçin.\n" +
-                        "5. “Geri yükle” ile yedek zip dosyasını seçin; içeriği önce gösterilir, geri yüklemeden önce mevcut verinin kopyası otomatik alınır."
-                )
-            }
         }
     }
 }
