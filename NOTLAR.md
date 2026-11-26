@@ -235,3 +235,8 @@ ViewModel'de kalanlar: durum, ekran yığını, mutex/sürüm kontrollü kayıt,
 - Ayarlar → Klasörü Değiştir: `RootChangeDialogs` — kök dizin / Belgeler / "Başka klasör seç…" (`RootFolder.setup(uri, direct=true)`: seçilen klasör olduğu gibi kayıt klasörü). Seçimden sonra `RootMigration.inspect` bulguyu özetler (`RootRules.Found/foundSummary`); kullanıcı "Bu Klasörü Kullan" (orijinaller `relink` ile öğrencilere bağlanır) veya "Dosyaları Kopyala" (`copy`: orijinaller + Yedek/*.zip + eksik fotoğraflar) seçer; "Vazgeç" yeni izni bırakır. Ayar yalnızca onaydan sonra değişir; eski dosyalar silinmez. `StudioViewModel.confirmRootChange/cancelRootChange`.
 - Yedek ZIP: `yedek.json`, `roster.json`, `photos/…`, `originals/<sınıf>/<dosya>`; ayar "Yedeğe orijinalleri de ekle". Geri yüklemede orijinaller `filesDir/restore_originals`'a hazırlanır, kayıt klasörüne yazılır, `origUri` güncellenir (`materializeRestored`, saveMutex içinde). Güvenlik yedekleri (Onc_) orijinal içermez; eski yedeklerde orijinal yoktur.
 - Test durumu: 239 birim test (CI "Test özeti").
+
+
+## Fotoğraf taşıma ve dışarıdan ekleme
+- Taşıma: `PhotoMoveRules` (saf kurallar: MOVE/SWAP/REPLACE), `PhotoMoveService` (dosya işlemleri; blob'lar bellekte okunur, hata olursa geri alınır, eski dosyalar liste kalıcı olduktan sonra silinir), `StudioViewModel.movePhoto`.
+- Dışarıdan ekleme: `PhotoImportRules` (dosya adı → numara eşleştirme), `addExternalPhoto` / `startBatchImport`; mevcut Review (kırpma) + PhotoSaver hattını kullanır, orijinal `Orijinaller`e gider.
