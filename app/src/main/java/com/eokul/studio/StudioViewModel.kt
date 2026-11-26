@@ -58,6 +58,8 @@ class CaptureState(
     var error by mutableStateOf<String?>(null)
     var session by mutableStateOf<EditSession?>(null)
     var saving by mutableStateOf(false)
+    /** Fotoğraf kameradan değil dışarıdan (galeri/dosya) geldi. */
+    var external = false
     /** İnceleme ekranında kalite/yüz uyarısı çıktı mı (kayıtta "tekrar çek" işareti olur). */
     var warned by mutableStateOf(false)
     /** İnceleme ekranında hesaplanan kalite puanı; -1 = hesaplanmadı. */
@@ -669,6 +671,143 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         say("Fotoğraf silindi")
     }
 
+    // ------------------------------------------------------------------ dışarıdan fotoğraf ekleme
+    /** Toplu eklemede "sıra/toplam" etiketi (inceleme ekranında gösterilir); yoksa null. */
+    var importProgress by mutableStateOf<String?>(null)
+        private set
+    private val importQueue = ArrayDeque<Pair<String, Uri>>()
+    private var importClassId: String? = null
+    private var importTotal = 0
+    private var importAdded = 0
+    private val importActive: Boolean get() = importClassId != null
+
+    /** Ortak ön koşullar; sorun varsa kullanıcıya söyler ve null döner, yoksa hazır kök klasörü verir. */
+    private fun importGuard(classId: String, no: String?): Uri? {
+        if (isRestoring) { say("Geri yükleme sürerken fotoğraf eklenemez"); return null }
+        val cls = classById(classId)
+        if (cls == null || (no != null && cls.students.none { it.no == no })) { say("⚠ Öğrenci bulunamadı"); return null }
+        if (no != null && isCaptureBusy(PhotoMoveRules.Ref(classId, no))) { say("⚠ Bu öğrenci için kayıt sürüyor; birkaç saniye sonra deneyin"); return null }
+        return requireRoot()
+    }
+
+    private fun isImage(uri: Uri): Boolean {
+        val type = try { ctx.contentResolver.getType(uri) } catch (_: Exception) { null }
+        return type == null || type.startsWith("image/") || type == "application/octet-stream"
+    }
+
+    /**
+     * Uygulamayla çekilmemiş bir öğrencinin fotoğrafını dosyadan ekler: aynı inceleme/kırpma ekranı açılır; kaydedilince
+     * orijinal "Orijinaller" klasörüne yazılır ve sonradan "Kırpmayı düzenle" ile yeniden kırpılabilir.
+     */
+    fun addExternalPhoto(classId: String, no: String, uri: Uri) {
+        if (importGuard(classId, no) == null) return
+        if (!isImage(uri)) { say("⚠ Seçilen dosya bir resim değil"); return }
+        Ops.log("op", "name", "external_photo", "ok", true, "batch", false)
+        onPhotoReady(classId, no, uri, null, external = true)
+    }
+
+    /** Toplu ekleme: [items] (öğrenci numarası, dosya) sırayla incelenip kaydedilir; ekranda "n/toplam" görünür. */
+    fun startBatchImport(classId: String, items: List<Pair<String, Uri>>) {
+        if (items.isEmpty()) return
+        if (importGuard(classId, null) == null) return
+        importQueue.clear()
+        importQueue.addAll(items.filter { isImage(it.second) })
+        if (importQueue.isEmpty()) { say("⚠ Eklenecek resim bulunamadı"); return }
+        importClassId = classId
+        importTotal = importQueue.size
+        importAdded = 0
+        Ops.log("op", "name", "external_photo", "ok", true, "batch", true, "n", importTotal)
+        nextImport()
+    }
+
+    private fun nextImport() {
+        val cid = importClassId ?: return
+        val (no, uri) = importQueue.removeFirstOrNull() ?: run { finishImport(); return }
+        importAdded++
+        importProgress = "$importAdded/$importTotal"
+        onPhotoReady(cid, no, uri, null, external = true)
+    }
+
+    private fun clearImport() {
+        importQueue.clear()
+        importClassId = null
+        importProgress = null
+    }
+
+    private fun finishImport() {
+        val n = importAdded
+        clearImport()
+        say("✓ $n fotoğraf eklendi")
+    }
+
+    /** Kullanıcı inceleme ekranından çıktı: kuyruk durur, eklenenler kalır. */
+    private fun stopImport() {
+        val done = importAdded - 1
+        val left = importQueue.size
+        clearImport()
+        say("Toplu ekleme durduruldu: ${maxOf(done, 0)} fotoğraf eklendi, ${left + 1} eklenmedi.")
+    }
+
+    // ------------------------------------------------------------------ fotoğraf taşıma
+    /** Fotoğraf taşıma sürüyor mu (çift dokunmayı engeller). */
+    var photoMoveBusy by mutableStateOf(false)
+        private set
+
+    private fun isCaptureBusy(r: PhotoMoveRules.Ref): Boolean =
+        capture?.let { it.classId == r.classId && it.no == r.no } == true || pendingCaptureOriginals.containsKey(captureKey(r.classId, r.no))
+
+    /**
+     * Yanlış öğrenciye çekilen fotoğrafı doğru öğrenciye taşır ([mode]: boş hedefe MOVE; dolu hedefte SWAP veya REPLACE).
+     * Dosyalar güvenle yazılır, hata olursa hiçbir şey değişmez; eski dosyalar liste kaydedildikten sonra silinir.
+     */
+    fun movePhoto(srcClassId: String, srcNo: String, dstClassId: String, dstNo: String, mode: PhotoMoveRules.Mode) {
+        if (photoMoveBusy) return
+        if (isRestoring) { say("Geri yükleme sürerken fotoğraf taşınamaz"); return }
+        val root = requireRoot() ?: return
+        val src = PhotoMoveRules.Ref(srcClassId, srcNo)
+        val dst = PhotoMoveRules.Ref(dstClassId, dstNo)
+        val snap = classes.toList()
+        PhotoMoveRules.problem(snap, src, dst, ::isCaptureBusy)?.let { say("⚠ $it"); return }
+        if (mode !in PhotoMoveRules.modes(snap, dst)) { say("⚠ Seçilen işlem bu hedef için geçerli değil"); return }
+        photoMoveBusy = true
+        viewModelScope.launch {
+            try {
+                var failure: String? = null
+                var done: Triple<PhotoMoveService.Result, Student, Student>? = null
+                saveMutex.withLock {
+                    // Kilit alındıktan sonra güncel hâl yeniden okunur ve doğrulanır (bu arada ad/kayıt değişmiş olabilir)
+                    val now = classes.toList()
+                    failure = PhotoMoveRules.problem(now, src, dst, ::isCaptureBusy)
+                    if (failure != null) return@withLock
+                    val sc = now.first { it.id == srcClassId }
+                    val dc = now.first { it.id == dstClassId }
+                    val ss = sc.students.first { it.no == srcNo }
+                    val ds = dc.students.first { it.no == dstNo }
+                    val res = withContext(Dispatchers.IO) { photoMoveService.execute(root, sc, ss, dc, ds, mode) }
+                    replaceClasses(PhotoMoveRules.apply(classes.toList(), src, dst, mode, System.currentTimeMillis(), res.dstOrig, res.srcOrig))
+                    persistAndWait()
+                    withContext(Dispatchers.IO) { photoMoveService.cleanup(root, res, sc, dc, ss, ds) }
+                    done = Triple(res, ss, ds)
+                }
+                failure?.let { say("⚠ $it"); return@launch }
+                val (res, ss, ds) = done ?: return@launch
+                Ops.log("op", "name", "photo_move", "ok", true, "mode", mode.name, "sameClass", srcClassId == dstClassId, "warn", res.warnings.size)
+                val msg = when (mode) {
+                    PhotoMoveRules.Mode.SWAP -> "✓ ${ss.no} ve ${ds.no} numaralı öğrencilerin fotoğrafları yer değiştirdi"
+                    else -> "✓ Fotoğraf ${ss.no} → ${ds.no} (${ds.name}) taşındı"
+                }
+                say(if (res.warnings.isEmpty()) msg else msg + "\nNot: " + res.warnings.joinToString("; "))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Ops.error("photo_move", e)
+                say("⚠ Fotoğraf taşınamadı: ${e.message ?: e.javaClass.simpleName}\nHiçbir şey değiştirilmedi.")
+            } finally {
+                photoMoveBusy = false
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ çekim akışı
     fun startSerial(classId: String) {
         val cls = classById(classId) ?: return
@@ -748,7 +887,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     fun onPhotoReady(
         classId: String, no: String, source: Uri, temp: File?,
         fromSaved: Boolean = false, savedBox: Box? = null, directEdit: Boolean = false,
-        savedBoxW: Int = 0, savedBoxH: Int = 0
+        savedBoxW: Int = 0, savedBoxH: Int = 0, external: Boolean = false
     ) {
         captureJob?.cancel()
         capture?.temp?.delete()
@@ -758,6 +897,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
         val pfState = if (pf == null || temp == null) "none" else if (pf.first == temp && !pf.second.isCancelled) "hit" else "miss"
         val cap = CaptureState(classId, no, source, temp, fromSaved)
         cap.directEdit = directEdit
+        cap.external = external
         capture = cap
         if (screen != Screen.Review) navigate(Screen.Review)
         val set = settings
@@ -819,6 +959,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun discardCapture() {
+        if (importActive) stopImport()
         // Yalnızca yeni çekim atılırsa "vazgeçilen" sayılır; kayıtlı fotoğrafın düzenleyicisini kapatmak vazgeçme değildir.
         capture?.takeIf { !it.fromSaved }?.let { Ops.log("discard", "id", Ops.id(it.no)) }
         captureJob?.cancel()
@@ -1295,6 +1436,7 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     // ------------------------------------------------------------------ kaydetme
         private val folders by lazy { FolderService(ctx) }
     private val photoSaver by lazy { PhotoSaver(ctx) }
+    private val photoMoveService by lazy { PhotoMoveService(ctx) }
 
     fun saveCapture() {
         if (isRestoring) {
@@ -1362,6 +1504,10 @@ class StudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun afterSave(classId: String, no: String, set: Settings) {
+        if (importActive) {
+            if (importQueue.isNotEmpty()) { nextImport(); return }   // sıradaki dosya: inceleme ekranında kal
+            finishImport()
+        }
         if (screen == Screen.Review) back()
         val top = screen
         if (top is Screen.Camera) {

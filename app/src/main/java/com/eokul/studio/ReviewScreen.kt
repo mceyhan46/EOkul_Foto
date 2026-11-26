@@ -97,7 +97,7 @@ fun ReviewScreen(studio: StudioViewModel) {
             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold
         )
         Text(
-            "${cap.no}  ·  ${cls?.name ?: ""}" + if (cap.fromSaved) "  ·  kayıtlı orijinalden" else "",
+            "${cap.no}  ·  ${cls?.name ?: ""}" + if (cap.fromSaved) "  ·  kayıtlı orijinalden" else if (cap.external) "  ·  dosyadan" + (studio.importProgress?.let { " $it" } ?: "") else "",
             color = Dim, fontSize = 12.sp
         )
         Spacer(Modifier.size(8.dp))

@@ -1,5 +1,8 @@
 package com.eokul.studio
 
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -86,10 +89,25 @@ fun ClassScreen(studio: StudioViewModel, classId: String) {
     var renameFor by remember { mutableStateOf<Student?>(null) }
     var deleteFor by remember { mutableStateOf<Student?>(null) }
     var clearFor by remember { mutableStateOf<Student?>(null) }
+    var moveFor by remember { mutableStateOf<Student?>(null) }
+    var fileFor by remember { mutableStateOf<Student?>(null) }          // "dosyadan ekle" onayı bekleyen öğrenci
+    var pickNo by remember { mutableStateOf<String?>(null) }            // dosya seçicisi hangi öğrenci için açık
+    var batchPlan by remember { mutableStateOf<PhotoImportRules.Plan?>(null) }
     var alsoFiles by remember { mutableStateOf(false) }
     var addOpen by remember { mutableStateOf(false) }
     var toolsOpen by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val no = pickNo
+        pickNo = null
+        if (uri != null && no != null) studio.addExternalPhoto(cls.id, no, uri)
+    }
+    val batchPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            val files = uris.map { PhotoImportRules.File(it.toString(), Output.displayName(ctx, it) ?: it.lastPathSegment ?: "") }
+            batchPlan = PhotoImportRules.plan(cls, files)
+        }
+    }
 
     val q = query.trim().lowercase()
     val shown = cls.students.filter { s ->
@@ -138,6 +156,10 @@ fun ClassScreen(studio: StudioViewModel, classId: String) {
                                             .putExtra(Intent.EXTRA_TEXT, body)
                                         ctx.startActivity(Intent.createChooser(send, "Eksik listesi"))
                                     }
+                                })
+                                DropdownMenuItem(text = { Text("Fotoğrafları toplu ekle (dosya adı = numara)") }, onClick = {
+                                    toolsOpen = false
+                                    batchPicker.launch(arrayOf("image/*"))
                                 })
                                 DropdownMenuItem(text = { Text("e-Okul ZIP oluştur (numara adlı)") }, onClick = {
                                     toolsOpen = false
@@ -238,6 +260,8 @@ fun ClassScreen(studio: StudioViewModel, classId: String) {
                             onRename = { renameFor = s },
                             onDelete = { deleteFor = s },
                             onClear = { clearFor = s },
+                            onMove = { moveFor = s },
+                            onFromFile = { if (s.captured) fileFor = s else { pickNo = s.no; filePicker.launch(arrayOf("image/*")) } },
                             onToggleRetake = { studio.toggleRetake(cls.id, s.no) }
                         )
                         HorizontalDivider()
@@ -276,6 +300,21 @@ fun ClassScreen(studio: StudioViewModel, classId: String) {
                     AppButton("Vazgeç", onClick = { actionFor = null }, style = BtnStyle.Tertiary, modifier = Modifier.fillMaxWidth())
                 }
             }
+        )
+    }
+
+    moveFor?.let { MovePhotoDialog(studio, cls.id, it) { moveFor = null } }
+    fileFor?.let { st ->
+        ReplaceFromFileDialog(st, onPick = { fileFor = null; pickNo = st.no; filePicker.launch(arrayOf("image/*")) }, onDismiss = { fileFor = null })
+    }
+    batchPlan?.let { plan ->
+        BatchImportDialog(
+            plan,
+            onConfirm = { items ->
+                batchPlan = null
+                studio.startBatchImport(cls.id, items.map { it.first to Uri.parse(it.second.uri) })
+            },
+            onDismiss = { batchPlan = null }
         )
     }
 
@@ -355,6 +394,8 @@ private fun StudentRow(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onClear: () -> Unit,
+    onMove: () -> Unit,
+    onFromFile: () -> Unit,
     onToggleRetake: () -> Unit
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -434,6 +475,10 @@ private fun StudentRow(
                     menu = false
                     onCamera()
                 })
+                DropdownMenuItem(text = { Text(if (s.captured) "Dosyadan fotoğrafı değiştir" else "Dosyadan fotoğraf ekle") }, onClick = {
+                    menu = false
+                    onFromFile()
+                })
                 DropdownMenuItem(text = { Text("Ad soyadı düzenle") }, onClick = {
                     menu = false
                     onRename()
@@ -442,6 +487,10 @@ private fun StudentRow(
                     DropdownMenuItem(text = { Text(if (s.retake) "Tekrar işaretini kaldır" else "Tekrar çekime işaretle") }, onClick = {
                         menu = false
                         onToggleRetake()
+                    })
+                    DropdownMenuItem(text = { Text("Fotoğrafı başka öğrenciye taşı") }, onClick = {
+                        menu = false
+                        onMove()
                     })
                     DropdownMenuItem(text = { Text("Fotoğrafı sil") }, onClick = {
                         menu = false
